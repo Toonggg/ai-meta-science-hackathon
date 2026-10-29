@@ -1,0 +1,8 @@
+This is the website of the Neurips workshop in Paris: https://ai4metascience.org/index.html and this is the hackathon website: https://ai4metascience-hackathon.stockholm.ai/
+Use both as a source of information, and please reference it during the research stage. The main source of information is the PDF document in the root of this repository.
+
+There are 3 tasks in the hackathon, and all 3 of them are something I am personally quite fond of. In this age of AI where it is easier than ever to write code, and even design proteins (models such as Alphafold come to mind, and others more) it is even more important to think more carefully about how science should be conducted from now on.
+
+The first stage of your research should be to find out whether any of the tasks already has a public company (there might be private companies in stealth) that is working on any aspect. Come up with some ideas to implement for each of the 3 tasks. Try to keep the description of the idea to 1-2 sentences at most. These are just some ideas I want to read myself, and then iterate more on them after we (the team) pick an idea and refine it further.
+
+- Inspiration for you: I am leaning myself towards Task 2, and in particular a tool that allows a researcher to keep a diary of sorts for a certain research project. The tool should be browser-based, since that is a natural place where researchers are already working. Keep this in mind.
