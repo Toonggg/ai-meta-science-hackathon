@@ -1,0 +1,214 @@
+"""Task 2: the provenance diary's logic.
+
+- Hypothesis ledger: a plan's pre-stated expectation is checked against the next
+  run's result; contradictions become first-class Surprise events.
+- Pivot micro-prompts: a new plan after a surprise/failure asks "why?" in the
+  moment, so the rationale is *stated*, not reconstructed later.
+- Ask the log: answers reviewer questions citing only diary events.
+"""
+
+import json
+import math
+import re
+
+import llm
+
+OPS = {">=": lambda a, b: a >= b, "≥": lambda a, b: a >= b, "<=": lambda a, b: a <= b, "≤": lambda a, b: a <= b,
+       ">": lambda a, b: a > b, "<": lambda a, b: a < b, "=": lambda a, b: abs(a - b) < 1e-9}
+EXPECT = re.compile(r"(?P<metric>[A-Za-z][\w@\-]*)\s*(?P<op>>=|<=|≥|≤|>|<|=)\s*(?P<val>-?\d*\.?\d+)")
+
+
+def check_expectation(expectation, result):
+    """Return (metric, op, expected, observed, holds) or None if not comparable."""
+    m = EXPECT.search(expectation or "")
+    if not m:
+        return None
+    metric = m.group("metric")
+    r = re.search(re.escape(metric) + r"\D{0,20}?(-?\d*\.\d+|-?\d+)", result or "", re.I)
+    if not r:
+        return None
+    expected, observed = float(m.group("val")), float(r.group(1))
+    return metric, m.group("op"), expected, observed, OPS[m.group("op")](observed, expected)
+
+
+def last(events, pred):
+    for ev in reversed(events):
+        if pred(ev):
+            return ev
+    return None
+
+
+def after_add(store, ev):
+    """Side effects of adding an event. Returns (auto_events, prompts)."""
+    events = store.events()
+    auto, prompts = [], []
+    idx = next(i for i, e in enumerate(events) if e["id"] == ev["id"])
+    before = events[:idx]
+
+    if ev["type"] == "run" and ev.get("result"):
+        plan = last(before, lambda e: e["type"] in ("plan", "pivot") and e.get("expectation"))
+        if plan:
+            chk = check_expectation(plan["expectation"], ev["result"])
+            if chk and not chk[4]:
+                metric, op, exp, obs, _ = chk
+                auto.append(store.add({
+                    "type": "surprise", "source": "episteme", "provenance": "inferred",
+                    "title": "Expectation contradicted: expected %s %s %g, observed %g" % (metric, op, exp, obs),
+                    "detail": "Auto-detected by the hypothesis ledger: the result of %s falls short of the expectation stated in %s."
+                              % (ev["id"], plan["id"]),
+                    "links": [plan["id"], ev["id"]],
+                }))
+            elif chk:
+                prompts.append({"kind": "info", "message": "Expectation in %s held (%s %s %g, observed %g)."
+                                % (plan["id"], chk[0], chk[1], chk[2], chk[3])})
+    if ev["type"] == "run" and ev.get("status") == "failed" and not auto:
+        prompts.append({"kind": "info", "message": "Run marked as failed. If you change approach next, Episteme will ask why."})
+
+    if ev["type"] == "plan":
+        # Was there trouble since the last plan/pivot, without a pivot explaining it?
+        since = []
+        for e in reversed(before):
+            if e["type"] in ("plan", "pivot"):
+                break
+            since.append(e)
+        trouble = [e for e in since if e["type"] == "surprise" or e.get("status") == "failed"]
+        if trouble:
+            prompts.append({
+                "kind": "pivot_why",
+                "plan_id": ev["id"],
+                "links": [e["id"] for e in reversed(trouble)],
+                "message": "This new plan follows %s. That looks like a change of direction. Why? One line is enough; "
+                           "it will be recorded as a stated rationale." % ", ".join(
+                               "%s (%s)" % (e["id"], e["title"] if len(e["title"]) <= 90 else e["title"][:88] + "...")
+                               for e in reversed(trouble)),
+            })
+    return auto, prompts
+
+
+def record_pivot(store, plan_id, links, reason, skipped):
+    events = store.events()
+    plan = next((e for e in events if e["id"] == plan_id), None)
+    if plan is None:
+        raise KeyError(plan_id)
+    if skipped:
+        trouble = [e for e in events if e["id"] in links]
+        reason = "No rationale given. Inferred from the log only: the change followed %s." % "; ".join(
+            "%s: %s" % (e["id"], e["title"]) for e in trouble)
+    return store.add({
+        "type": "pivot", "source": "episteme" if skipped else "manual",
+        "provenance": "inferred" if skipped else "stated",
+        "title": "Switch to: " + plan["title"],
+        "detail": reason,
+        "links": list(links),
+        "ts": plan["ts"],
+    }, before_id=plan_id)
+
+
+# -- Ask the log ------------------------------------------------------------
+
+STOP = set("the a an of to in on at and or for why what did they we was were is are how this that with from by it "
+           "change changed approach step steps do does switch switched drop dropped move moved use used try tried go went "
+           "abandon abandoned pick picked decide decided".split())
+
+
+def words(s):
+    return {w for w in re.findall(r"[a-z0-9]+", (s or "").lower()) if w not in STOP and len(w) > 1}
+
+
+def ev_text(e):
+    data = e.get("data") or {}
+    extra = (" dataset data version %s %s %s" % (data.get("name", ""), data.get("version", ""), data.get("hash", ""))) if data else ""
+    return " ".join(str(e.get(k, "")) for k in ("type", "title", "detail", "result", "expectation", "code", "source")) + \
+        " " + json.dumps(e.get("params", {})) + extra
+
+
+def cite(e):
+    return "[%s]" % e["id"]
+
+
+def explain_pivot(pv, events):
+    by_id = {e["id"]: e for e in events}
+    lines = ["**Step %d (%s) is a pivot: %s.**" % (pv["step"], pv["id"], pv["title"])]
+    tag = "stated by the researcher at the time" if pv.get("provenance") == "stated" else \
+        "**inferred**, not stated by the researcher. Treat it with caution"
+    lines.append("Reason (%s) %s: %s" % (tag, cite(pv), pv.get("detail", "(none recorded)")))
+    trig = [by_id[i] for i in pv.get("links", []) if i in by_id]
+    if trig:
+        lines.append("What triggered it:")
+        for t in trig:
+            extra = (": " + t["result"]) if t.get("result") else ""
+            lines.append("- %s %s%s" % (cite(t), t["title"], extra))
+    after = [e for e in events if pv["id"] in e.get("links", [])]
+    if after:
+        lines.append("What happened next:")
+        for a in after:
+            extra = (": " + a["result"]) if a.get("result") else ""
+            lines.append("- %s %s%s" % (cite(a), a["title"], extra))
+    return "\n".join(lines)
+
+
+def ask_heuristic(question, events):
+    m = re.search(r"\bstep\s*(\d+)", question, re.I) or re.search(r"\bE(\d+)\b", question)
+    if m:
+        n = int(m.group(1))
+        target = None
+        if m.group(0).lower().startswith("step"):
+            target = events[n - 1] if 0 < n <= len(events) else None
+        else:
+            target = next((e for e in events if e["id"] == "E%d" % n), None)
+        if not target:
+            return "The log has no %s. It has %d steps." % (m.group(0), len(events))
+        if target["type"] == "pivot":
+            return explain_pivot(target, events)
+        # A plan or run: find the pivot that explains it.
+        pv = next((e for e in events if e["type"] == "pivot" and (target["id"] in e.get("links", []) or
+                                                                  e["id"] in target.get("links", []))), None)
+        head = "Step %d %s is a %s: %s." % (target["step"], cite(target), target["type"], target["title"])
+        if pv:
+            return head + "\n\n" + explain_pivot(pv, events)
+        detail = target.get("detail") or target.get("result") or ""
+        return head + ("\n\n" + detail if detail else "") + "\n\nNo pivot is linked to this step in the log."
+
+    q = words(question)
+    docs = [words(ev_text(e)) for e in events]
+    idf = {w: math.log((1 + len(events)) / (1 + sum(w in d for d in docs))) + 1 for w in q}
+    scored = sorted(((sum(idf[w] for w in q & d), e) for d, e in zip(docs, events)), key=lambda x: -x[0])
+    scored = [(s, e) for s, e in scored if s > 0]
+    if not scored:
+        return "The log contains nothing about that. (Episteme only answers from recorded events.)"
+    best = scored[0][1]
+    pivots = [e for _, e in scored if e["type"] == "pivot"]
+    if re.search(r"\b(why|reason|rationale)\b", question, re.I) and pivots:
+        return explain_pivot(pivots[0], events)
+    if best["type"] == "pivot":
+        pv = best if best["type"] == "pivot" else next(
+            (e for e in events if e["type"] == "pivot" and (best["id"] in e.get("links", []) or e["id"] in best.get("links", []))), None)
+        if pv:
+            return explain_pivot(pv, events)
+    lines = ["Most relevant events in the log:"]
+    for s, e in scored[:3]:
+        d = e.get("data")
+        lines.append("- %s step %d, %s: %s%s%s" % (cite(e), e["step"], e["type"], e["title"],
+                                                 ("; result: " + e["result"]) if e.get("result") else "",
+                                                 ("; data: %s v%s (%s)" % (d.get("name"), d.get("version"), d.get("hash")))
+                                                 if d else ""))
+    return "\n".join(lines)
+
+
+ASK_SYSTEM = """You answer a reviewer's questions about a research project using ONLY the provenance log provided.
+Rules:
+- Cite every factual statement with the event id in square brackets, e.g. [E4]. Refer to steps by number when useful.
+- Each event has provenance "stated" (recorded by the researcher at the time) or "inferred" (reconstructed). Say which kind your answer rests on; flag inferred rationale as less reliable.
+- If the log does not contain the answer, say so plainly. Do not speculate beyond the log.
+- Be concise: a short paragraph or a few bullets, in Markdown."""
+
+
+def ask(question, events, use_ai):
+    if use_ai and llm.available():
+        compact = [{k: v for k, v in e.items() if k != "code"} for e in events]
+        try:
+            return {"mode": "ai", "answer": llm.text(ASK_SYSTEM, "LOG:\n%s\n\nQUESTION: %s" % (
+                json.dumps(compact, indent=1, ensure_ascii=False), question))}
+        except llm.LLMError as e:
+            return {"mode": "heuristic", "answer": ask_heuristic(question, events), "ai_error": str(e)}
+    return {"mode": "heuristic", "answer": ask_heuristic(question, events)}

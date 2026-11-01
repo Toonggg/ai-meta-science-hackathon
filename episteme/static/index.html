@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Episteme: research flight recorder</title>
+<script>document.documentElement.dataset.theme = localStorage.getItem("theme") || "tokyo-night";</script>
+<link rel="stylesheet" href="/themes.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="logo">◈</span>
+    <div><strong>Episteme</strong><small>a flight recorder for AI-assisted research</small></div>
+  </div>
+  <nav id="tabs">
+    <button data-tab="question"><span class="num">1</span> Vet question</button>
+    <span class="arrow">→</span>
+    <button data-tab="diary" class="active"><span class="num">2</span> Record work</button>
+    <span class="arrow">→</span>
+    <button data-tab="claims"><span class="num">3</span> Check claims</button>
+  </nav>
+  <div class="ai">
+    <label class="toggle" title="Search free scholarly APIs. Sends keywords only, never your diary.">
+      <input type="checkbox" id="use-search"> <span>Search</span>
+    </label>
+    <button id="src-badge" class="badge" title="Search sources and their live status">…</button>
+    <label class="toggle" title="Let the connected model refine searches and write a grounded critique.">
+      <input type="checkbox" id="use-ai"> <span>AI</span>
+    </label>
+    <button id="ai-badge" class="badge" title="Choose a model provider">…</button>
+    <select id="theme" class="theme-pick" title="Colour theme (all checked for WCAG AA contrast)" aria-label="Colour theme">
+      <option value="tokyo-night">Tokyo Night</option>
+      <option value="dracula">Dracula</option>
+      <option value="catppuccin-mocha">Catppuccin Mocha</option>
+      <option value="one-dark">One Dark</option>
+      <option value="catppuccin-latte">Latte (light)</option>
+    </select>
+  </div>
+</header>
+
+<main>
+  <!-- TASK 1 -->
+  <section id="tab-question" class="tab" hidden>
+    <div class="intro">
+      <h2>Is this question worth asking?</h2>
+      <p>Paste one research question. Episteme flags ambiguous terms, hidden assumptions and data you can't get, then gives a verdict: <b>proceed / narrow / revise / stop</b>.</p>
+    </div>
+    <ol class="tiers" id="tiers">
+      <li data-tier="local"><b>1 · Local rules</b><span>Instant. Nothing leaves your machine.</span></li>
+      <li data-tier="search"><b>2 · Literature search</b><span>Keywords only go to free scholarly APIs. If one is down, the others cover. <a href="#" class="open-status" id="tier-src"></a></span></li>
+      <li data-tier="ai"><b>3 · AI refinement</b><span>The model plans sharper searches, then critiques citing only papers found.</span></li>
+    </ol>
+    <div class="row">
+      <textarea id="q-input" rows="2" placeholder="e.g. How does social media engagement impact adolescent wellbeing?"></textarea>
+      <button id="q-run" class="primary">Stress-test</button>
+    </div>
+    <div class="examples" id="q-examples"></div>
+    <div id="q-out"></div>
+  </section>
+
+  <!-- TASK 2 -->
+  <section id="tab-diary" class="tab">
+    <div class="cols">
+      <div class="col-main">
+        <div class="intro">
+          <h2 id="project-name">Research diary</h2>
+          <p>Plans, runs, surprises and pivots, with the <i>why</i>. Stated entries were recorded at the time; inferred ones were reconstructed afterwards.</p>
+        </div>
+        <form id="add-form" class="card add">
+          <div class="row">
+            <select id="add-type">
+              <option value="note">Thought</option>
+              <option value="plan">Plan / hypothesis</option>
+              <option value="run">Run / result</option>
+              <option value="surprise">Surprise</option>
+              <option value="artifact">Artifact / commit</option>
+            </select>
+            <input id="add-title" placeholder="Drop a thought…   (⌘⇧E from anywhere)" autocomplete="off">
+            <button class="primary" type="submit">Add</button>
+          </div>
+          <div class="add-more">
+            <input id="add-expect" class="for-plan" placeholder="I expect…  e.g. AUROC >= 0.75  (checked against the next run)">
+            <div class="row for-run">
+              <input id="add-result" placeholder="Result, e.g. AUROC 0.62 (5-fold CV)">
+              <select id="add-status"><option value="ok">ok</option><option value="failed">failed</option></select>
+            </div>
+            <textarea id="add-detail" rows="2" placeholder="Details / reasoning (optional)"></textarea>
+          </div>
+        </form>
+        <div id="prompts"></div>
+        <ol id="timeline"></ol>
+      </div>
+
+      <aside class="col-side">
+        <div class="card">
+          <h3>Reviewer: ask the log</h3>
+          <p class="muted">Answers cite only diary events, like a reviewer who wasn't there would need.</p>
+          <form id="ask-form" class="row">
+            <input id="ask-input" placeholder="Why did they change approach at step 4?" autocomplete="off">
+            <button class="primary">Ask</button>
+          </form>
+          <div class="examples" id="ask-examples"></div>
+          <div id="ask-out"></div>
+        </div>
+        <div class="card">
+          <h3>Export</h3>
+          <div class="btns">
+            <a class="btn" href="/api/export?format=md">Decision appendix (.md)</a>
+            <a class="btn" href="/api/export?format=prov">W3C PROV-JSON</a>
+            <a class="btn" href="/api/export?format=json">Raw JSON</a>
+          </div>
+          <h3>Capture from other tools</h3>
+          <p class="muted">Any script, notebook or agent hook can log events:</p>
+          <pre class="snippet" id="curl-snippet"></pre>
+          <div class="btns">
+            <button id="reset-demo" class="ghost">Reload demo session</button>
+            <button id="clear-diary" class="ghost danger">Start empty diary</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- TASK 3 -->
+  <section id="tab-claims" class="tab" hidden>
+    <div class="intro">
+      <h2>Claim-to-evidence map</h2>
+      <p>Paste a paper's text. Each claim gets linked to the figure, table or paragraph behind it, and to the diary run that produced it. Claims that are unsupported or overstated are flagged.</p>
+    </div>
+    <div class="row">
+      <button id="c-demo" class="ghost">Load demo paper</button>
+      <span class="muted">The demo paper overstates the diary's own results. Can you spot where before running it?</span>
+    </div>
+    <textarea id="c-input" rows="10" placeholder="Paste abstract + results + discussion (plain text)…"></textarea>
+    <div class="row"><button id="c-run" class="primary">Build claim map</button></div>
+    <div id="c-out"></div>
+  </section>
+</main>
+
+<dialog id="settings">
+  <form method="dialog" id="settings-form">
+    <div class="dlg-tabs"><button type="button" data-pane="model" class="active">Model</button><button type="button" data-pane="sources">Search sources</button></div>
+    <div class="pane" data-pane="model">
+    <h3>Model provider</h3>
+    <p class="muted">Episteme works offline with heuristics. Connect any model for deeper analysis. Settings and keys stay on this machine in <code>.episteme/config.json</code>.</p>
+    <label>Provider <select id="s-provider"></select></label>
+    <label>Model <input id="s-model"></label>
+    <label>Base URL <input id="s-base"></label>
+    <label class="key-row">API key <input id="s-key" type="password" autocomplete="off"></label>
+    <p class="muted small" id="s-hint"></p>
+    </div>
+    <div class="pane" data-pane="sources" hidden>
+      <h3>Search sources</h3>
+      <p class="muted">Free sources are queried <b>together</b> and merged. If one is down or rate-limited it is paused and the others cover for it. Web engines need your own key and are tried <b>in order</b> until one answers. All sources are re-checked every 10 minutes.</p>
+      <div id="src-list"></div>
+      <div class="btns"><button type="button" id="src-check" class="ghost">Check all now</button></div>
+    </div>
+    <div class="btns end">
+      <button value="cancel" class="ghost">Cancel</button>
+      <button id="s-save" value="save" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="status-dlg" class="wide">
+  <div class="st-head">
+    <div>
+      <h3>Search source status</h3>
+      <p class="muted" id="st-summary">…</p>
+    </div>
+    <div class="btns">
+      <button type="button" id="st-check-all" class="primary">Check all now</button>
+      <button type="button" id="st-close" class="ghost">Close</button>
+    </div>
+  </div>
+  <div id="st-table"></div>
+  <p class="muted small">Each check is a cheap lookup of one known record (never a full search). Bars show the last 24 checks, oldest first: <span class="hb ok"></span> online, <span class="hb bad"></span> failed. Checks come from the background poller, from your searches, or from the buttons here. A failing source is paused with a growing cooldown, and searches skip it until then; <b>Check</b> ignores the cooldown. Web engines are only checked on request, because each check uses one query from your quota. <a href="#" id="st-configure">Configure sources and keys →</a></p>
+</dialog>
+
+<div id="toast" hidden></div>
+<script src="/app.js"></script>
+</body>
+</html>

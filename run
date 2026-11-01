@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Episteme launcher: ./run  → opens the app in your browser. Ctrl+C to stop.
+#
+#   ./run --offline     no network at all: no model, no search (local rules only)
+#   ./run --no-open     don't open a browser tab
+#   ./run --port 9000   preferred port (falls back to the next free one)
+#   ./run --reset       reload the demo session before starting
+#
+# Needs only Python 3.9+ (stdlib). No installs, no build step.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STATE="$ROOT/.episteme"
+LOG="$STATE/server.log"
+PORT=8765
+OPEN=1
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --offline) export EPISTEME_OFFLINE=1 ;;
+    --no-open) OPEN=0 ;;
+    --port) PORT="${2:?--port needs a number}"; shift ;;
+    --reset) rm -f "$STATE/diary.json" ;;
+    -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "Unknown option: $1 (try ./run --help)"; exit 1 ;;
+  esac
+  shift
+done
+
+mkdir -p "$STATE"
+
+PY=""
+for cand in python3 python; do
+  if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null; then
+    PY="$cand"; break
+  fi
+done
+if [ -z "$PY" ]; then
+  echo "Episteme needs Python 3.9 or newer. Install it from https://www.python.org/downloads/ (or: brew install python)."
+  exit 1
+fi
+
+open_url() {
+  [ "$OPEN" = 1 ] || return 0
+  if command -v open >/dev/null 2>&1; then open "$1"
+  elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$1" >/dev/null 2>&1
+  elif command -v start >/dev/null 2>&1; then start "$1"
+  fi
+}
+
+# Already running? Just bring it up.
+if [ -f "$STATE/url" ]; then
+  URL="$(cat "$STATE/url")"
+  if curl -fs "$URL/api/status" >/dev/null 2>&1; then
+    echo "Episteme is already running at $URL"
+    open_url "$URL"
+    exit 0
+  fi
+  rm -f "$STATE/url"
+fi
+
+"$PY" "$ROOT/episteme/server.py" --state "$STATE" --port "$PORT" >>"$LOG" 2>&1 &
+PID=$!
+cleanup() { kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; rm -f "$STATE/url"; echo; echo "Episteme stopped."; }
+trap cleanup INT TERM
+
+printf "Starting Episteme"
+for _ in $(seq 1 100); do
+  if [ -f "$STATE/url" ]; then break; fi
+  if ! kill -0 "$PID" 2>/dev/null; then
+    echo; echo "Episteme failed to start. Last lines of $LOG:"; tail -n 15 "$LOG"; exit 1
+  fi
+  sleep 0.1
+done
+URL="$(cat "$STATE/url" 2>/dev/null || true)"
+if [ -z "$URL" ]; then echo; echo "Timed out waiting for the server. See $LOG"; cleanup; exit 1; fi
+
+printf "\r\033[K"
+echo "◈ Episteme is running at $URL   (Ctrl+C to stop)"
+open_url "$URL"
+wait "$PID"

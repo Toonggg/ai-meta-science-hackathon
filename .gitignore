@@ -247,3 +247,6 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+
+# Episteme local state (diary, settings incl. API keys, logs)
+.episteme/
