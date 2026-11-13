@@ -12,6 +12,16 @@ Event shape (all fields optional except id/type/title/ts):
     result      observed outcome, e.g. "AUROC 0.54 (5-fold CV)" (runs only)
     status      ok | failed
     code, params, data {name, version, hash}, links [event ids]
+
+Fields added for automatic capture:
+    actor        who stated it: human | agent | system (episteme's own rules)
+    confirmed_by "human" when a person confirmed an agent-stated reason with one click
+    episode_id   the episode (see episodes.py) this event was stitched from
+    raw_ids      raw events (raw.jsonl) that are the evidence for this event
+    classified_by {"model": ..., "at": ...} when a model wrote or classified it
+
+Raw capture lives in a separate append-only file (raw.jsonl, see RawLog) so the
+diary itself stays small: it holds decisions, raw.jsonl holds everything.
 """
 
 import json
@@ -22,6 +32,9 @@ from datetime import datetime, timezone
 from demo_data import demo_events
 
 VALID_TYPES = {"plan", "run", "surprise", "pivot", "note", "artifact", "question"}
+VALID_ACTORS = {"human", "agent", "system"}
+ACTOR_FOR_SOURCE = {"manual": "human", "episteme": "system", "agent": "agent"}
+RAW_KINDS = {"instruction", "action", "agent_text", "commit", "stop"}
 
 
 def now_iso():
@@ -67,6 +80,10 @@ class Diary:
             ev.setdefault("ts", now_iso())
             ev.setdefault("source", "manual")
             ev.setdefault("provenance", "stated")
+            if ev.get("actor") not in VALID_ACTORS:
+                ev.pop("actor", None)
+                if ev["source"] in ACTOR_FOR_SOURCE:
+                    ev["actor"] = ACTOR_FOR_SOURCE[ev["source"]]
             if ev.get("type") not in VALID_TYPES:
                 ev["type"] = "note"
             ev["title"] = (ev.get("title") or "(untitled)").strip()
@@ -101,3 +118,66 @@ class Diary:
             data["events"] = events
             data["next_id"] = len(events) + 1
             self._write(data)
+
+
+class RawLog:
+    """Append-only raw capture log: one JSON object per line in raw.jsonl.
+
+    Never rewritten, so a crash can at worst lose the line being written.
+    Raw ids ("R1", "R2", ...) are stable and never reused.
+    """
+
+    def __init__(self, path):
+        self.path = path
+        self.lock = threading.Lock()
+        self._next = self._count() + 1
+
+    def _count(self):
+        if not os.path.exists(self.path):
+            return 0
+        n = 0
+        with open(self.path, encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    n += 1
+        return n
+
+    def add(self, ev):
+        ev = {k: v for k, v in ev.items() if v not in (None, "", [], {})}
+        if ev.get("kind") not in RAW_KINDS:
+            raise ValueError("raw event kind must be one of: %s" % ", ".join(sorted(RAW_KINDS)))
+        ev.pop("rid", None)
+        ev.setdefault("ts", now_iso())
+        ev.setdefault("source", "agent")
+        with self.lock:
+            ev["rid"] = "R%d" % self._next
+            self._next += 1
+            with open(self.path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(ev, ensure_ascii=False) + "\n")
+        return ev
+
+    def all(self):
+        with self.lock:
+            if not os.path.exists(self.path):
+                return []
+            out = []
+            with open(self.path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        out.append(json.loads(line))
+                    except ValueError:
+                        continue  # a torn last line from a crash: skip it
+            return out
+
+    def get(self, rids):
+        want = set(rids)
+        return [e for e in self.all() if e["rid"] in want]
+
+    def clear(self):
+        with self.lock:
+            if os.path.exists(self.path):
+                os.remove(self.path)
+            self._next = 1
