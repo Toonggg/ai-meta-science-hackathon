@@ -11,6 +11,8 @@ import argparse
 import json
 import mimetypes
 import os
+import re
+import secrets
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -36,6 +38,17 @@ RAW = None
 STITCHER = None
 MAX_RAW_BATCH = 500
 MAX_BODY = 5 * 1024 * 1024
+
+# A random token per server start, embedded in the page. Actions only a person at the page should
+# take need it; capture hooks and the Task 1/3 routes do not. Written to .episteme/token for local
+# tools (tools/replay.py). It stops other web pages and naive scripts; anything that can read the
+# user's files can read it too.
+TOKEN = secrets.token_urlsafe(24)
+NEEDS_TOKEN = {"/api/confirm", "/api/pivot", "/api/delete", "/api/reset", "/api/clear", "/api/settings", "/api/sources"}
+# Attribution is decided by Episteme (stitcher, confirm flow), never taken from a posted event.
+ATTRIBUTION_FIELDS = ("actor", "confirmation", "confirmed_by", "confirmed_at", "skipped_at", "classified_by",
+                      "needs_confirmation", "quote", "model_summary", "proposed_reason", "pending", "episode_id",
+                      "raw_ids")
 
 
 def wipe(reset_diary):
@@ -76,13 +89,26 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(n) if n else b"{}"
         return json.loads(raw.decode() or "{}")
 
+    def own_hosts(self):
+        port = self.server.server_address[1]
+        return {"127.0.0.1:%d" % port, "localhost:%d" % port}
+
+    def host_ok(self):
+        # DNS rebinding: a foreign site that resolves its name to 127.0.0.1 still sends its own Host.
+        return (self.headers.get("host") or "").lower() in self.own_hosts()
+
     def same_origin(self):
-        # Block cross-site writes from other web pages (no CORS is offered).
+        # Block writes from other web pages, including other local apps on other ports (no CORS is offered).
         origin = self.headers.get("origin")
-        return not origin or origin.startswith(("http://127.0.0.1:", "http://localhost:"))
+        return not origin or origin.lower() in {"http://" + h for h in self.own_hosts()}
+
+    def has_token(self):
+        return secrets.compare_digest(self.headers.get("x-episteme-token") or "", TOKEN)
 
     # -- routes ------------------------------------------------------------
     def do_GET(self):
+        if not self.host_ok():
+            return self.send(403, {"error": "unexpected Host header"})
         u = urlparse(self.path)
         p = u.path
         if p == "/api/sources":
@@ -129,17 +155,31 @@ class Handler(BaseHTTPRequestHandler):
         return self.static(p)
 
     def do_POST(self):
+        if not self.host_ok():
+            return self.send(403, {"error": "unexpected Host header"})
         if not self.same_origin():
             return self.send(403, {"error": "cross-origin request refused"})
         p = urlparse(self.path).path
+        if p in NEEDS_TOKEN and not self.has_token():
+            return self.send(403, {"error": "this action is only available from the Episteme page"})
         try:
             b = self.body()
         except ValueError as e:
             return self.send(400, {"error": str(e)})
+        if not isinstance(b, dict):
+            return self.send(400, {"error": "expected a JSON object"})
         use_ai = bool(b.get("use_ai", True))
         try:
             if p == "/api/events":
-                ev = STORE.add(b.get("event", b))
+                ev = b.get("event", b)
+                if not isinstance(ev, dict):
+                    return self.send(400, {"error": "expected a JSON object"})
+                ev = {k: v for k, v in ev.items() if k not in ATTRIBUTION_FIELDS}
+                src = ev.get("source")
+                if not self.has_token() and (src in ("manual", "episteme") or not isinstance(src, str)
+                                             or not re.fullmatch(r"[a-z_]{1,20}", src)):
+                    ev["source"] = "tool"  # an outside script: not the researcher at the page, not Episteme
+                ev = STORE.add(ev)
                 auto, prompts = diary.after_add(STORE, ev)
                 return self.send(200, {"event": ev, "auto": auto, "prompts": prompts})
             if p == "/api/raw":  # capture tools: {"events": [...]} or a single event
@@ -209,6 +249,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(404, "not found", "text/plain")
         with open(full, "rb") as f:
             data = f.read()
+        if full == os.path.join(STATIC, "index.html"):
+            data = data.replace(b"__EPISTEME_TOKEN__", TOKEN.encode())
         return self.send(200, data, mimetypes.guess_type(full)[0] or "application/octet-stream")
 
 
@@ -239,6 +281,9 @@ def main():
     url = "http://127.0.0.1:%d" % httpd.server_address[1]
     with open(os.path.join(a.state, "url"), "w") as f:
         f.write(url)
+    fd = os.open(os.path.join(a.state, "token"), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:  # for local tools such as tools/replay.py
+        f.write(TOKEN)
     sys.stderr.write("Episteme listening on %s (AI: %s)\n" % (url, llm.status()["label"]))
     sys.stderr.flush()
     try:

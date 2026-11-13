@@ -5,12 +5,14 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const TYPE_LABEL = { plan: "Plan", run: "Run", surprise: "Surprise", pivot: "Pivot", note: "Note", artifact: "Artifact", question: "Question" };
-const SOURCE_LABEL = { chat: "AI chat", colab: "Colab", github: "GitHub", manual: "manual", agent: "agent hook", episteme: "Episteme", git: "git hook" };
+const SOURCE_LABEL = { chat: "AI chat", colab: "Colab", github: "GitHub", manual: "manual", agent: "agent hook", episteme: "Episteme", git: "git hook", tool: "script" };
 
 let state = { events: [], status: null };
 
+// Per-start token from the server: marks writes as coming from this page (confirm, settings, clear...).
+const TOKEN = document.querySelector('meta[name="episteme-token"]')?.content || "";
 async function api(path, body) {
-  const opts = body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
+  const opts = body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json", "x-episteme-token": TOKEN }, body: JSON.stringify(body) };
   const r = await fetch(path, opts);
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || r.statusText);
@@ -275,7 +277,7 @@ function whoBadge(e) {
   else if (e.actor === "system" || e.provenance === "inferred") { cls += " inferred"; txt = "inferred"; }
   else { cls += " " + (e.provenance || ""); txt = e.provenance || "stated"; }
   if (e.confirmation === "skipped") txt += " · unconfirmed";
-  return `<span class="${cls}" title="${esc(e.who || "")}">${txt}</span>`;
+  return `<span class="${esc(cls)}" title="${esc(e.who || "")}">${esc(txt)}</span>`;
 }
 
 function evCard(e) {
@@ -291,16 +293,17 @@ function evCard(e) {
   if (e.status) fields.push(["Status", `<span class="${e.status === "failed" ? "status-failed" : ""}">${esc(e.status)}</span>`]);
   if (e.params) fields.push(["Parameters", esc(Object.entries(e.params).map(([k, v]) => `${k}=${v}`).join(", "))]);
   if (e.data) fields.push(["Data", esc(`${e.data.name} v${e.data.version} (${e.data.hash})`)]);
-  if (e.links?.length) fields.push(["Linked to", e.links.map((l) => `<button class="ref" data-ref="${l}">${l}</button>`).join(" ")]);
+  if (e.links?.length) fields.push(["Linked to", e.links.map((l) => `<button class="ref" data-ref="${esc(l)}">${esc(l)}</button>`).join(" ")]);
   if (e.raw_ids?.length) fields.push(["Raw evidence", `<button class="ref" data-raw="${esc(e.raw_ids.join(","))}" title="Show what the capture hooks recorded">${esc(e.raw_ids.join(" "))}</button>`]);
   const time = new Date(e.ts);
   const when = isNaN(time) ? e.ts : time.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  return `<li class="ev t-${e.type}" id="ev-${e.id}" data-id="${e.id}">
-    <span class="dot">${e.step}</span>
+  const id = esc(e.id);
+  return `<li class="ev t-${esc(e.type)}" id="ev-${id}" data-id="${id}">
+    <span class="dot">${esc(e.step)}</span>
     <div class="card">
-      <div class="top"><span class="chip">${TYPE_LABEL[e.type] || e.type}</span><span class="title">${esc(e.title)}</span>
-        <button class="del" title="Delete event" data-del="${e.id}">×</button></div>
-      <div class="meta"><span>${e.id}</span><span>${esc(when)}</span><span>via ${esc(SOURCE_LABEL[e.source] || e.source)}</span>
+      <div class="top"><span class="chip">${esc(TYPE_LABEL[e.type] || e.type)}</span><span class="title">${esc(e.title)}</span>
+        <button class="del" title="Delete event" data-del="${id}">×</button></div>
+      <div class="meta"><span>${id}</span><span>${esc(when)}</span><span>via ${esc(SOURCE_LABEL[e.source] || e.source)}</span>
         ${whoBadge(e)}
         ${e.result ? `<span>→ ${esc(e.result.length > 60 ? e.result.slice(0, 58) + "…" : e.result)}</span>` : ""}</div>
       <div class="body"><dl>${fields.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
@@ -454,13 +457,14 @@ function showPrompts(prompts) {
 
 // one-click confirmation of pivots the agent stated or the rules flagged
 function confirmCard(p) {
-  const ask = p.pending ? `Why did the approach change at step ${p.step}?` : `Is this the reason for step ${p.step}?`;
+  const step = esc(p.step), id = esc(p.id);
+  const ask = p.pending ? `Why did the approach change at step ${step}?` : `Is this the reason for step ${step}?`;
   const body = p.pending
     ? `<p class="muted small">Flagged by rules; no model has checked it yet. Write the reason in your words, or skip.</p>`
     : `<p class="quote">“${esc(p.reason)}”</p>${p.model_summary ? `<p class="muted small">Model's summary: ${esc(p.model_summary)}</p>` : ""}`;
-  return `<div class="card prompt" data-confirm="${p.id}">
+  return `<div class="card prompt" data-confirm="${id}">
     <h4>${ask}</h4>
-    <div class="muted small"><button class="ref" data-ref="${p.id}">${p.id}</button> ${esc(p.title)} · ${esc(p.who)}</div>
+    <div class="muted small"><button class="ref" data-ref="${id}">${id}</button> ${esc(p.title)} · ${esc(p.who)}</div>
     ${body}
     <form class="row"${p.pending ? "" : " hidden"}><input placeholder="The reason, in your words" autocomplete="off">
       <button class="primary">Save reason</button></form>

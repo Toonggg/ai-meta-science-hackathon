@@ -110,8 +110,10 @@ def save(settings):
     raw = {k: (settings.get(k) or "").strip() for k in ("provider", "model", "base_url", "api_key", "stitch_model")}
     if "stitch_model" not in settings and _cfg is not None:
         raw["stitch_model"] = config.section("llm").get("stitch_model", "")  # keep it when the UI omits it
-    if not raw["api_key"] and _cfg and raw["provider"] == _cfg["provider"]:
-        raw["api_key"] = _cfg.get("api_key", "")  # blank field = keep existing key
+    same_endpoint = _cfg and raw["provider"] == _cfg["provider"] and raw["provider"] in DEFAULTS and \
+        (raw["base_url"] or DEFAULTS[raw["provider"]]["base_url"]).rstrip("/") == _cfg["base_url"]
+    if not raw["api_key"] and same_endpoint:
+        raw["api_key"] = _cfg.get("api_key", "")  # blank field = keep the key, but never send it to a new address
     with _lock:
         config.save_section("llm", {k: v for k, v in raw.items() if v})
         _cfg = _resolve(raw)

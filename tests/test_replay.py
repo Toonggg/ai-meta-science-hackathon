@@ -39,7 +39,7 @@ class ReplayTest(unittest.TestCase):
 
     def test_replay_instant_with_project(self):
         server.STORE.reset_demo()
-        replay.main([self.file, "--url", self.url, "--instant", "--clear", "--project", "Thermostability"])
+        replay.main([self.file, "--url", self.url, "--instant", "--clear", "--project", "Thermostability", "--token", server.TOKEN])
         snap = server.STORE.snapshot()
         self.assertEqual(snap["project"], "Thermostability")
         self.assertEqual([e["type"] for e in snap["events"]],
@@ -48,7 +48,7 @@ class ReplayTest(unittest.TestCase):
         self.assertEqual(snap["events"][0]["ts"], "2026-11-14T10:00:00+01:00")  # original time kept
 
     def test_replay_paced(self):
-        replay.main([self.file, "--url", self.url, "--clear", "--speed", "100000"])
+        replay.main([self.file, "--url", self.url, "--clear", "--speed", "100000", "--token", server.TOKEN])
         self.assertEqual(len(server.RAW.all()), len(SESSION))
 
     def test_gaps_scaled_and_capped(self):

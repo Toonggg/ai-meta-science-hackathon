@@ -38,8 +38,13 @@ Numbers become metrics, anything else becomes context. One line per result; seve
 - Paths inside the project are shortened to relative paths.
 - Secrets are stripped before anything is written or sent (`episteme/redact.py`): common API key formats, bearer tokens, passwords in URLs, `key=value` pairs with secret-looking names, and the values of environment variables whose names contain KEY, TOKEN, SECRET or PASSWORD. This is pattern-based: a safety net, not a guarantee.
 
+## Who can say what
+
+Attribution (who stated a reason, who confirmed it) is decided by Episteme, never taken from a posted event. Confirming or editing a reason, changing settings, and clearing the diary only work from the Episteme page, which carries a token that changes each time Episteme starts. Events other scripts post to `/api/events` are labelled as coming from a script. This stops other web pages and naive scripts; anything that can read your files can also read `.episteme/token`.
+
 ## Limits
 
+- One agent session at a time per project. Episodes are built from one stream in arrival order, so two Claude Code sessions running in parallel in the same project interleave, and a result can be linked to the other session's instruction.
 - Claude Code only for agent capture. Other tools can send raw events to `POST /api/raw` (see `capture/send.py`).
 - Decisions made outside the agent (a meeting, a chat) are not seen. The why-prompt and manual notes cover them.
 - Long runs started in the background (cluster jobs, `nohup`) report their result outside the hook. Keep runs in the foreground, or log the result manually.

@@ -26,6 +26,7 @@ diary itself stays small: it holds decisions, raw.jsonl holds everything.
 
 import json
 import os
+import re
 import threading
 from datetime import datetime, timezone
 
@@ -80,13 +81,20 @@ class Diary:
             ev.setdefault("ts", now_iso())
             ev.setdefault("source", "manual")
             ev.setdefault("provenance", "stated")
+            if ev["provenance"] not in ("stated", "inferred"):
+                ev["provenance"] = "stated"
+            if not isinstance(ev["source"], str) or not re.fullmatch(r"[a-z_]{1,20}", ev["source"]):
+                ev["source"] = "manual"
+            if "links" in ev:  # only real event ids: they end up in the page's markup
+                links = ev["links"] if isinstance(ev["links"], list) else []
+                ev["links"] = [l for l in links if isinstance(l, str) and re.fullmatch(r"E\d{1,7}", l)]
             if ev.get("actor") not in VALID_ACTORS:
                 ev.pop("actor", None)
                 if ev["source"] in ACTOR_FOR_SOURCE:
                     ev["actor"] = ACTOR_FOR_SOURCE[ev["source"]]
             if ev.get("type") not in VALID_TYPES:
                 ev["type"] = "note"
-            ev["title"] = (ev.get("title") or "(untitled)").strip()
+            ev["title"] = (str(ev.get("title") or "") or "(untitled)").strip()
             idx = len(data["events"])
             if before_id:
                 for i, e in enumerate(data["events"]):

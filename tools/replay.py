@@ -18,6 +18,7 @@ Python 3.8 compatible, stdlib only.
 
 import argparse
 import json
+import os
 import sys
 import time
 import urllib.request
@@ -44,9 +45,15 @@ def load(path):
     return events
 
 
-def post(url, path, body):
-    req = urllib.request.Request(url + path, data=json.dumps(body).encode(), headers={"content-type": "application/json"})
-    with urllib.request.urlopen(req, timeout=30) as r:
+TOKEN = ""  # set from --token / --token-file; needed only for --clear
+
+
+def post(url, path, body, timeout=30):
+    headers = {"content-type": "application/json"}
+    if TOKEN:
+        headers["x-episteme-token"] = TOKEN
+    req = urllib.request.Request(url + path, data=json.dumps(body).encode(), headers=headers)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode())
 
 
@@ -76,8 +83,20 @@ def main(argv=None):
     ap.add_argument("--instant", action="store_true", help="send everything at once")
     ap.add_argument("--clear", action="store_true", help="empty the diary and raw log first")
     ap.add_argument("--project", help="project name to set when clearing")
+    ap.add_argument("--token", help="Episteme's page token (default: read from --token-file)")
+    ap.add_argument("--token-file", default=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                                         ".episteme", "token"),
+                    help="file the running Episteme writes its token to (default %(default)s)")
     a = ap.parse_args(argv)
     url = a.url.rstrip("/")
+    global TOKEN
+    TOKEN = a.token or ""
+    if not TOKEN and a.clear:
+        try:
+            with open(a.token_file, encoding="utf-8") as f:
+                TOKEN = f.read().strip()
+        except OSError:
+            sys.exit("--clear needs Episteme's token: start Episteme first, or pass --token / --token-file")
 
     events = load(a.file)
     if a.clear:
@@ -89,7 +108,7 @@ def main(argv=None):
             time.sleep(wait)
             post(url, "/api/raw", {"events": [ev]})
             print("%-11s %s" % (ev["kind"], (ev.get("command") or ev.get("text") or "")[:70].replace("\n", " ")))
-    status = post(url, "/api/stitch", {})  # stitch now rather than on the next background tick
+    status = post(url, "/api/stitch", {}, timeout=600)  # stitch now; a model call can take minutes
     print("replayed %d events: %d episodes stitched, %d pivots pending" % (len(events), status["stitched"], status["pending"]))
     return 0
 
