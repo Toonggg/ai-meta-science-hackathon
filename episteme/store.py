@@ -159,8 +159,28 @@ class RawLog:
                     n += 1
         return n
 
+    STR_FIELDS = ("ts", "source", "session", "text", "tool", "command", "intent", "output", "commit", "actor")
+    MAX_LEN = 20000
+
+    @classmethod
+    def clean(cls, ev):
+        """Coerce fields to the types episodes.py expects, so one malformed event from a
+        hook, replay file or curl call cannot break segmentation for the whole log."""
+        ev = dict(ev)
+        for k in cls.STR_FIELDS:
+            if k in ev and not isinstance(ev[k], str):
+                ev[k] = "" if ev[k] is None else (json.dumps(ev[k]) if isinstance(ev[k], (dict, list)) else str(ev[k]))
+            if isinstance(ev.get(k), str) and len(ev[k]) > cls.MAX_LEN:
+                ev[k] = ev[k][-cls.MAX_LEN:] if k == "output" else ev[k][:cls.MAX_LEN]
+        if "files" in ev:
+            files = ev["files"] if isinstance(ev["files"], list) else [ev["files"]]
+            ev["files"] = [str(f) for f in files if f not in (None, "")][:500]
+        if "error" in ev:
+            ev["error"] = ev["error"] is True or str(ev["error"]).lower() in ("true", "1", "yes")
+        return ev
+
     def add(self, ev):
-        ev = {k: v for k, v in ev.items() if v not in (None, "", [], {})}
+        ev = self.clean({k: v for k, v in ev.items() if v not in (None, "", [], {})})
         if ev.get("kind") not in RAW_KINDS:
             raise ValueError("raw event kind must be one of: %s" % ", ".join(sorted(RAW_KINDS)))
         ev.pop("rid", None)
@@ -184,9 +204,11 @@ class RawLog:
                     if not line:
                         continue
                     try:
-                        out.append(json.loads(line))
+                        ev = json.loads(line)
                     except ValueError:
                         continue  # a torn last line from a crash: skip it
+                    if isinstance(ev, dict) and isinstance(ev.get("rid"), str):
+                        out.append(self.clean(ev))  # also repairs events stored before cleaning existed
             return out
 
     def get(self, rids):

@@ -282,7 +282,8 @@ function evCard(e) {
   const fields = [];
   if (e.expectation) fields.push(["Expected", esc(e.expectation)]);
   if (e.detail) fields.push([e.type === "pivot" ? "Why" : "Detail", esc(e.detail)]);
-  if (e.quote) fields.push(["In their words", `<span class="quote">“${esc(e.quote)}”</span>`]);
+  if (e.quote && e.quote !== e.detail) fields.push(["In their words", `<span class="quote">“${esc(e.quote)}”</span>`]);
+  if (e.model_summary) fields.push(["Model's summary", esc(e.model_summary)]);
   if (e.proposed_reason) fields.push(["Proposed", esc(e.proposed_reason)]);
   if (e.who && e.actor) fields.push(["Stated by", esc(e.who)]);
   if (e.classified_by) fields.push(["Classified by", esc(`${e.classified_by.model} · ${e.classified_by.at}`)]);
@@ -456,7 +457,7 @@ function confirmCard(p) {
   const ask = p.pending ? `Why did the approach change at step ${p.step}?` : `Is this the reason for step ${p.step}?`;
   const body = p.pending
     ? `<p class="muted small">Flagged by rules; no model has checked it yet. Write the reason in your words, or skip.</p>`
-    : `<p>${esc(p.reason)}</p>${p.quote ? `<p class="quote">“${esc(p.quote)}”</p>` : ""}`;
+    : `<p class="quote">“${esc(p.reason)}”</p>${p.model_summary ? `<p class="muted small">Model's summary: ${esc(p.model_summary)}</p>` : ""}`;
   return `<div class="card prompt" data-confirm="${p.id}">
     <h4>${ask}</h4>
     <div class="muted small"><button class="ref" data-ref="${p.id}">${p.id}</button> ${esc(p.title)} · ${esc(p.who)}</div>

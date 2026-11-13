@@ -38,6 +38,18 @@ MAX_RAW_BATCH = 500
 MAX_BODY = 5 * 1024 * 1024
 
 
+def wipe(reset_diary):
+    """Reset the diary and empty the raw log under the stitcher's lock, so a stitching pass
+    can never write into a half-cleared diary."""
+    def both():
+        reset_diary()
+        RAW.clear()
+    if STITCHER:
+        STITCHER.reset(also=both)
+    else:
+        both()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "Episteme/0.1"
 
@@ -157,16 +169,10 @@ class Handler(BaseHTTPRequestHandler):
                 STORE.delete(b["id"])
                 return self.send(200, {"ok": True})
             if p == "/api/reset":  # the demo diary has no raw capture behind it
-                STORE.reset_demo()
-                RAW.clear()
-                if STITCHER:
-                    STITCHER.reset()
+                wipe(lambda: STORE.reset_demo())
                 return self.send(200, {"ok": True})
             if p == "/api/clear":  # fresh project: empty diary and raw log, optionally {"project": "name"}
-                STORE.clear(b.get("project"))
-                RAW.clear()
-                if STITCHER:
-                    STITCHER.reset()
+                wipe(lambda: STORE.clear(b.get("project")))
                 return self.send(200, {"ok": True})
             if p == "/api/stitch":  # run the stitcher now instead of waiting for the next tick
                 STITCHER.run_once()

@@ -15,9 +15,14 @@ Design decision 2: rules propose, the model confirms. For every final episode:
      agent's message (agent). A quote that is not found downgrades the reason to
      inferred, so the model cannot put words in anyone's mouth.
 
-If no model is available, or the call fails, a pending pivot built from the rules
-is shown and classified later. The reviewer never waits for the model: the stitcher
-runs while the research happens, and reading the diary never calls it.
+Every flagged episode first gets a pending pivot built from the rules, shown at once.
+The model then classifies it in place, without holding the stitcher's lock, so a slow
+model never blocks the researcher's Confirm or a Clear. If there is no model, or the
+call fails, the pivot stays pending and is retried. The reviewer never waits for the
+model: the stitcher runs while the research happens, and reading the diary never calls it.
+
+A stated reason is always the person's own words, verbatim (`detail` = `quote`); the
+model's paraphrase is kept in `model_summary` and labelled as the model's.
 
 State (which episodes were stitched into which events) lives in .episteme/stitch.json.
 """
@@ -83,9 +88,23 @@ def _norm(s):
     return re.sub(r"\s+", " ", (s or "").lower()).strip(" .\"'")
 
 
+def find_quote(quote, sources):
+    """Return the passage exactly as the person wrote it, or None. The model's quote must be a
+    real phrase (3+ words) found in a source, ignoring case and spacing; what is stored is the
+    source's own text, never the model's copy of it."""
+    words = _norm(quote).split()
+    if len(words) < 3 or len(" ".join(words)) < 8:
+        return None
+    pattern = re.compile(r"\s+".join(re.escape(w) for w in words), re.I)
+    for s in sources:
+        m = pattern.search(s or "")
+        if m:
+            return m.group(0)
+    return None
+
+
 def quote_found(quote, sources):
-    q = _norm(quote)
-    return len(q) >= 8 and any(q in _norm(s) for s in sources)
+    return find_quote(quote, sources) is not None
 
 
 def _truthy(v):
@@ -103,6 +122,8 @@ class Stitcher:
         self.retry_at = 0.0
         self.last_error = ""
         self.last_run = ""
+        self.generation = 0    # bumped by reset(); a model answer from an older generation is dropped
+        self.inflight = set()  # episode ids with a model call running, so two passes never ask twice
 
     # -- state ------------------------------------------------------------------
     def _load(self):
@@ -118,14 +139,21 @@ class Stitcher:
             json.dump(self.state, f, indent=1)
         os.replace(tmp, self.path)
 
-    def reset(self):
+    def reset(self, also=None):
+        """Forget all stitching. `also` (e.g. clearing the diary and raw log) runs under the same
+        lock, so a stitching pass can never write into a half-cleared diary. A model answer that
+        arrives afterwards sees the new generation and is dropped."""
         with self.lock:
+            if also:
+                also()
+            self.generation += 1
             self.state = {"episodes": {}, "runs": {}}
             self._save()
 
     def status(self):
-        eps = self.state["episodes"].values()
-        return {"stitched": len(self.state["episodes"]),
+        with self.lock:
+            eps = list(self.state["episodes"].values())
+        return {"stitched": len(eps),
                 "pending": sum(1 for s in eps if s.get("status") == "pending"),
                 "pivots": sum(1 for s in eps if s.get("pivot")),
                 "model": llm.model_name(llm.stitch_model()) if self._ai_ready(ignore_retry=True) else "",
@@ -162,25 +190,52 @@ class Stitcher:
 
     # -- one pass ---------------------------------------------------------------
     def run_once(self):
+        """Phase 1 (locked): rules for every new final episode; flagged ones get a pending pivot.
+        Phase 2 (no lock): ask the model about pending pivots, so a slow model call never blocks
+        Confirm, Clear or status. Phase 3 (locked): apply each answer if it is still wanted."""
+        todo = []
         with self.lock:
+            gen = self.generation
             raw = self.raw.all()
             raw_by = {e["rid"]: e for e in raw}
             eps = episodes.segment(raw)
-            changed = False
             for i, ep in enumerate(eps):
                 if not ep["final"]:
                     continue
                 prev = eps[i - 1] if i > 0 else None
                 st = self.state["episodes"].get(ep["id"])
                 if st is None:
-                    self._stitch(ep, prev, raw_by)
-                    changed = True
-                elif st.get("status") == "pending" and self._ai_ready():
-                    self._classify(ep, prev, st)
-                    changed = True
-            if changed:
-                self._save()
+                    try:
+                        st = self._stitch(ep, prev, raw_by)
+                    except Exception as e:  # one broken episode must not stop the others
+                        self.state["episodes"][ep["id"]] = {"status": "failed", "error": repr(e)[:300],
+                                                            "events": [], "at": now_iso()}
+                        self.last_error = "stitching %s: %r" % (ep["id"], e)
+                        self._save()
+                        continue
+                    self._save()  # after every episode, so a crash never re-stitches (duplicates) it
+                if st.get("status") == "pending" and ep["id"] not in self.inflight and self._ai_ready():
+                    self.inflight.add(ep["id"])
+                    todo.append((ep, prev))
             self.last_run = now_iso()
+
+        for ep, prev in todo:
+            try:
+                answer = self._ask(ep, prev)
+            except Exception as e:  # LLMError or anything unexpected: stay pending, retry later
+                self.last_error = str(e) if isinstance(e, llm.LLMError) else "model call: %r" % e
+                self.retry_at = time.time() + RETRY_SECONDS
+                answer = None
+            with self.lock:
+                self.inflight.discard(ep["id"])
+                st = self.state["episodes"].get(ep["id"])
+                if answer is None or gen != self.generation or not st or st.get("status") != "pending":
+                    continue  # failed, diary cleared meanwhile, or the researcher already answered
+                try:
+                    self._apply(ep, prev, st, *answer)
+                except Exception as e:
+                    self.last_error = "applying %s: %r" % (ep["id"], e)
+                self._save()
 
     def _add(self, ev, st, before_id=None):
         added = self.store.add(ev, before_id=before_id)
@@ -259,10 +314,8 @@ class Stitcher:
                            params={"commit": c["hash"], "files": c["files"][:50]}), st)
 
         if ep["instruction"] and any(f in ep["flags"] for f in PIVOT_FLAGS):
-            if self._ai_ready():
-                self._classify(ep, prev, st)
-            else:
-                self._pending_pivot(ep, prev, st)
+            self._pending_pivot(ep, prev, st)  # shown at once; the model (if any) classifies it next
+        return st
 
     # -- pivots -----------------------------------------------------------------
     def _trouble(self, prev):
@@ -308,18 +361,16 @@ class Stitcher:
                    "rule_flags": ep["flags"], "metric_drops": ep.get("drops", [])}
         return redact.redact_obj(payload)
 
-    def _classify(self, ep, prev, st):
+    def _ask(self, ep, prev):
+        """The model call. Runs without the lock. Returns (answer, classified_by)."""
         model = llm.stitch_model()
-        try:
-            out = llm.structured(SYSTEM, json.dumps(self._context(ep, prev), ensure_ascii=False, indent=1), SCHEMA,
-                                 model=model)
-        except llm.LLMError as e:
-            self.last_error = str(e)
-            self.retry_at = time.time() + RETRY_SECONDS
-            self._pending_pivot(ep, prev, st)
-            return
+        out = llm.structured(SYSTEM, json.dumps(self._context(ep, prev), ensure_ascii=False, indent=1), SCHEMA,
+                             model=model)
         self.last_error = ""
-        classified_by = {"model": llm.model_name(model), "at": now_iso()}
+        return out, {"model": llm.model_name(model), "at": now_iso()}
+
+    def _apply(self, ep, prev, st, out, classified_by):
+        """Write the model's answer into the diary. Runs under the lock."""
         if st.get("pivot"):
             current = next((e for e in self.store.events() if e["id"] == st["pivot"]), None)
             if current is None or current.get("confirmation"):
@@ -329,11 +380,11 @@ class Stitcher:
         human_src = [x["text"] for x in ep["instructions"]]
         agent_src = [a["text"] for a in ep["agent_text"]] + ([a["text"] for a in prev["agent_text"]] if prev else [])
         source = out.get("reason_source") or "none"
-        quote = out.get("reason_quote") or ""
-        if source == "human" and not quote_found(quote, human_src):
-            source = "none"
-        elif source == "agent" and not quote_found(quote, agent_src):
-            source = "none"
+        quote = ""
+        if source in ("human", "agent"):
+            quote = find_quote(out.get("reason_quote") or "", human_src if source == "human" else agent_src) or ""
+            if not quote:
+                source = "none"  # not found verbatim: nobody is credited with it
         reason = (out.get("reason") or "").strip()[:600]
         if source == "none" and reason and not reason.lower().startswith("inferred"):
             reason = "Inferred: " + reason
@@ -350,17 +401,22 @@ class Stitcher:
 
         actor = {"human": "human", "agent": "agent"}.get(source, "system")
         title = first_line(out.get("title") or "Switch from %s to %s" % (out.get("from") or "?", out.get("to") or "?"), 120)
+        # A stated reason is the person's (or agent's) own words, verbatim. The model's paraphrase is
+        # kept apart and labelled as the model's, so nobody is credited with words they did not write.
+        detail = quote.strip()[:600] if source != "none" else (reason or "(no reason given)")
         fields = {"type": "pivot", "source": "agent" if actor != "system" else "episteme", "actor": actor,
                   "provenance": "stated" if actor != "system" else "inferred",
-                  "title": title, "detail": reason or "(no reason given)",
+                  "title": title, "detail": detail,
                   "links": self._trouble(prev) + ([st["plan"]] if st.get("plan") else []),
                   "episode_id": ep["id"], "raw_ids": [x["rid"] for x in ep["instructions"]] +
                   ([ep["agent_text"][-1]["rid"]] if source == "agent" and ep["agent_text"] else []),
                   "classified_by": classified_by, "needs_confirmation": actor != "human"}
         if source != "none":
             fields["quote"] = quote[:300]
+            if reason:
+                fields["model_summary"] = reason
         if st.get("pivot"):
-            self.store.update(st["pivot"], fields, remove=("pending",))
+            self.store.update(st["pivot"], fields, remove=("pending",) if source != "none" else ("pending", "model_summary"))
         else:
             if st.get("plan"):
                 fields["ts"] = self.store_event_ts(st["plan"])

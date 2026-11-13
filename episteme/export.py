@@ -47,6 +47,7 @@ def to_prov(snapshot):
                 attrs["ep:" + k] = e[k]
         attrs["ep:statedBy"] = who(e)
         for k, label in (("actor", "ep:actor"), ("confirmation", "ep:confirmation"), ("quote", "ep:quote"),
+                         ("model_summary", "ep:modelSummary"),
                          ("proposed_reason", "ep:proposedReason"), ("episode_id", "ep:episode")):
             if e.get(k):
                 attrs[label] = e[k]
@@ -104,8 +105,10 @@ def to_markdown(snapshot):
         lines.append("- **Event:** %s · %s · source: %s" % (e["id"], e["ts"], e.get("source")))
         lines.append("- **Stated by:** " + who(e))
         for label, key in (("Expectation", "expectation"), ("Detail / reason", "detail"),
-                           ("Quoted from the log", "quote"), ("Originally proposed reason", "proposed_reason"),
-                           ("Result", "result"), ("Status", "status")):
+                           ("Quoted from the log", "quote"), ("Model's summary", "model_summary"),
+                           ("Originally proposed reason", "proposed_reason"), ("Result", "result"), ("Status", "status")):
+            if key == "quote" and e.get("quote") == e.get("detail"):
+                continue  # the reason already is the verbatim quote
             if e.get(key):
                 lines.append("- **%s:** %s" % (label, e[key]))
         if e.get("classified_by"):

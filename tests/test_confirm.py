@@ -63,7 +63,7 @@ class ConfirmTest(unittest.TestCase):
         ev = diary.confirm(self.store, self.pivot()["id"], "edit", "Reviewer 2 asked for a homology-aware split.")
         self.assertEqual((ev["actor"], ev["provenance"]), ("human", "stated"))
         self.assertEqual(ev["detail"], "Reviewer 2 asked for a homology-aware split.")
-        self.assertEqual(ev["proposed_reason"], "The random split leaked similar proteins.")
+        self.assertEqual(ev["proposed_reason"], "The random split leaked similar proteins")  # source text, verbatim
         self.assertNotIn("quote", ev)
 
     def test_skip(self):

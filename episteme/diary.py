@@ -122,7 +122,8 @@ def prompts(events):
     for e in events:
         if needs_answer(e):
             out.append({"id": e["id"], "step": e.get("step"), "title": e["title"], "reason": e.get("detail", ""),
-                        "quote": e.get("quote", ""), "who": who(e), "pending": bool(e.get("pending")),
+                        "quote": e.get("quote", ""), "model_summary": e.get("model_summary", ""),
+                        "who": who(e), "pending": bool(e.get("pending")),
                         # A pending pivot has no checked reason yet, so there is nothing to confirm.
                         "actions": ["edit", "skip"] if e.get("pending") else ["confirm", "edit", "skip"]})
     return out
