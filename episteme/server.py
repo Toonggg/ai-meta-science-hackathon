@@ -20,16 +20,19 @@ sys.path.insert(0, HERE)
 
 import claims  # noqa: E402
 import diary  # noqa: E402
+import episodes  # noqa: E402
 import export  # noqa: E402
 import llm  # noqa: E402
 import pipeline  # noqa: E402
 import question  # noqa: E402
 import search  # noqa: E402
 from demo_data import DEMO_PAPER  # noqa: E402
-from store import Diary  # noqa: E402
+from store import Diary, RawLog  # noqa: E402
 
 STATIC = os.path.join(HERE, "static")
 STORE = None
+RAW = None
+MAX_RAW_BATCH = 500
 MAX_BODY = 5 * 1024 * 1024
 
 
@@ -77,6 +80,17 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, job) if job else self.send(404, {"error": "unknown job"})
         if p == "/api/events":
             return self.send(200, STORE.snapshot())
+        if p == "/api/raw":  # ?ids=R1,R2  or  ?since=R10  or everything
+            q = parse_qs(u.query)
+            if q.get("ids"):
+                return self.send(200, {"raw": RAW.get(q["ids"][0].split(","))})
+            evs = RAW.all()
+            if q.get("since"):
+                n = int(q["since"][0].lstrip("Rr") or 0)
+                evs = [e for e in evs if int(e["rid"][1:]) > n]
+            return self.send(200, {"raw": evs})
+        if p == "/api/episodes":
+            return self.send(200, {"episodes": episodes.segment(RAW.all())})
         if p == "/api/demo-paper":
             return self.send(200, {"text": DEMO_PAPER})
         if p == "/api/export":
@@ -106,17 +120,28 @@ class Handler(BaseHTTPRequestHandler):
                 ev = STORE.add(b.get("event", b))
                 auto, prompts = diary.after_add(STORE, ev)
                 return self.send(200, {"event": ev, "auto": auto, "prompts": prompts})
+            if p == "/api/raw":  # capture tools: {"events": [...]} or a single event
+                batch = b.get("events") if isinstance(b.get("events"), list) else [b]
+                if len(batch) > MAX_RAW_BATCH:
+                    return self.send(400, {"error": "at most %d raw events per request" % MAX_RAW_BATCH})
+                try:
+                    saved = [RAW.add(ev) for ev in batch if isinstance(ev, dict)]
+                except ValueError as e:
+                    return self.send(400, {"error": str(e)})
+                return self.send(200, {"raw": [e["rid"] for e in saved]})
             if p == "/api/pivot":
                 ev = diary.record_pivot(STORE, b["plan_id"], b.get("links", []), b.get("reason", ""), bool(b.get("skipped")))
                 return self.send(200, {"event": ev})
             if p == "/api/delete":
                 STORE.delete(b["id"])
                 return self.send(200, {"ok": True})
-            if p == "/api/reset":
+            if p == "/api/reset":  # the demo diary has no raw capture behind it
                 STORE.reset_demo()
+                RAW.clear()
                 return self.send(200, {"ok": True})
-            if p == "/api/clear":
+            if p == "/api/clear":  # fresh project: empty diary and raw log
                 STORE.clear()
+                RAW.clear()
                 return self.send(200, {"ok": True})
             if p == "/api/question":  # synchronous, rules/AI only (kept for scripts)
                 return self.send(200, question.analyse(b.get("question", ""), use_ai))
@@ -154,13 +179,14 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global STORE
+    global STORE, RAW
     ap = argparse.ArgumentParser()
     ap.add_argument("--state", default=os.path.join(os.path.dirname(HERE), ".episteme"))
     ap.add_argument("--port", type=int, default=8765)
     a = ap.parse_args()
     os.makedirs(a.state, exist_ok=True)
     STORE = Diary(os.path.join(a.state, "diary.json"))
+    RAW = RawLog(os.path.join(a.state, "raw.jsonl"))
     llm.init(a.state)  # also initialises the shared config file
     search.start_poller()
 

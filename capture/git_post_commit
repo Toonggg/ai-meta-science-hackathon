@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""git post-commit hook: send each commit to Episteme as a raw `commit` event.
+
+Install in the research project (not in Episteme's own repo):
+    ln -s /path/to/episteme-repo/capture/git_post_commit .git/hooks/post-commit
+
+Captures hash, message, author kind and changed file names. Never diffs or file
+contents. Always exits 0 so it can never block a commit.
+"""
+
+import os
+import subprocess
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+
+
+def git(*args):
+    return subprocess.run(("git",) + args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                           universal_newlines=True, timeout=5).stdout.strip()
+
+
+def main():
+    try:
+        sha = git("rev-parse", "HEAD")
+        msg = git("log", "-1", "--format=%B")
+        files = [f for f in git("diff-tree", "--no-commit-id", "--name-only", "-r", "--root", "HEAD").splitlines() if f]
+        repo = os.path.basename(git("rev-parse", "--show-toplevel"))
+        # Commits made from inside a Claude Code session carry this env var.
+        by_agent = bool(os.environ.get("CLAUDECODE"))
+        from send import send
+        send([{"kind": "commit", "source": "git", "session": "git:" + repo, "commit": sha[:12],
+               "text": msg[:2000], "files": files[:200], "actor": "agent" if by_agent else "human"}])
+    except Exception:
+        pass
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

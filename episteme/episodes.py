@@ -16,7 +16,7 @@ stored append-only in .episteme/raw.jsonl. A raw event looks like:
     tool       tool name for actions (Bash, Edit, Write, Read, ...)
     command    shell command for Bash actions
     files      files touched
-    output     tail of the tool output (already redacted by the hook)
+    output     tail of the tool output plus every RESULT line (redacted by the hook)
     error      true if the action failed
     commit     commit hash (commits only)
 
@@ -106,7 +106,7 @@ def is_significant(ev):
 def run_key(ev):
     """What makes two runs 'the same command' for the quick-fix rule."""
     m = SCRIPT.search(ev.get("command") or "")
-    return m.group(3) if m else (ev.get("command") or "").strip()
+    return m.group(3).rsplit("/", 1)[-1] if m else (ev.get("command") or "").strip()
 
 
 # -- segmentation --------------------------------------------------------------
