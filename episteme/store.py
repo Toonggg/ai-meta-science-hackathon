@@ -97,6 +97,19 @@ class Diary:
             self._write(data)
         return ev
 
+    def update(self, event_id, fields, remove=()):
+        """Change fields of one event in place (keeps its id and position)."""
+        with self.lock:
+            data = self._read()
+            for e in data["events"]:
+                if e["id"] == event_id:
+                    e.update({k: v for k, v in fields.items() if k not in ("id", "step")})
+                    for k in remove:
+                        e.pop(k, None)
+                    self._write(data)
+                    return e
+        raise KeyError(event_id)
+
     def delete(self, event_id):
         with self.lock:
             data = self._read()

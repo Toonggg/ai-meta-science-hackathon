@@ -107,7 +107,9 @@ def init(state_dir):
 def save(settings):
     """Persist settings chosen in the UI. Keys stay local (file mode 600)."""
     global _cfg
-    raw = {k: (settings.get(k) or "").strip() for k in ("provider", "model", "base_url", "api_key")}
+    raw = {k: (settings.get(k) or "").strip() for k in ("provider", "model", "base_url", "api_key", "stitch_model")}
+    if "stitch_model" not in settings and _cfg is not None:
+        raw["stitch_model"] = config.section("llm").get("stitch_model", "")  # keep it when the UI omits it
     if not raw["api_key"] and _cfg and raw["provider"] == _cfg["provider"]:
         raw["api_key"] = _cfg.get("api_key", "")  # blank field = keep existing key
     with _lock:
@@ -124,6 +126,7 @@ def status():
         "model": c["model"],
         "base_url": c["base_url"],
         "has_key": bool(c.get("api_key")),
+        "stitch_model": stitch_model() or "",
         "available": available(),
         "providers": [{"id": k, "label": LABELS[k], "model": v["model"], "base_url": v["base_url"],
                        "needs_key": bool(v["key_env"]), "env_key_found": bool(_env_key(k))} for k, v in DEFAULTS.items()],
@@ -220,19 +223,33 @@ ADAPTERS = {"anthropic": _call_anthropic, "openai": _call_openai, "gemini": _cal
 
 # -- public API ------------------------------------------------------------------
 
-def text(system, user):
+def _with_model(model):
+    return dict(_cfg, model=model) if model else _cfg
+
+
+def model_name(model=None):
+    """The model a call with this override would use (recorded as provenance)."""
+    return model or (_cfg or {}).get("model", "")
+
+
+def stitch_model():
+    """Optional cheaper model for background work (the stitcher). None = the main model."""
+    return os.environ.get("EPISTEME_STITCH_MODEL") or config.section("llm").get("stitch_model") or None
+
+
+def text(system, user, model=None):
     if not available():
         raise LLMError("No model configured")
-    return ADAPTERS[_cfg["provider"]](_cfg, system, user, None)
+    return ADAPTERS[_cfg["provider"]](_with_model(model), system, user, None)
 
 
-def structured(system, user, schema):
+def structured(system, user, schema, model=None):
     """Ask for JSON matching `schema`. Smaller/local models may drift, so the
     reply is parsed leniently and coerced to the schema's shape."""
     if not available():
         raise LLMError("No model configured")
     prompt = user + "\n\nRespond with JSON only, matching this JSON schema:\n" + json.dumps(schema)
-    raw = ADAPTERS[_cfg["provider"]](_cfg, system, prompt, schema)
+    raw = ADAPTERS[_cfg["provider"]](_with_model(model), system, prompt, schema)
     return coerce(_parse_json(raw), schema)
 
 

@@ -212,8 +212,8 @@ def _higher_is_better(metric):
 
 
 def _flag(episodes):
-    last_metric = {}   # metric name -> (value, episode id)
-    for ep in episodes:
+    last_metric = {}   # metric name -> (value, episode id, run rid, run context)
+    for i, ep in enumerate(episodes):
         flags = []
         if ep["close_reason"] == "error":
             flags.append("failure")
@@ -223,19 +223,22 @@ def _flag(episodes):
         drops = []
         for run in ep["runs"]:
             res = run.get("result") or {}
+            ctx = res.get("context") or {}
             for name, val in (res.get("metrics") or {}).items():
                 prev = last_metric.get(name)
                 if prev is not None:
                     worse = val < prev[0] if _higher_is_better(name) else val > prev[0]
                     if worse:
-                        drops.append({"metric": name, "before": prev[0], "after": val, "before_episode": prev[1]})
-                last_metric[name] = (val, ep["id"])
+                        drops.append({"metric": name, "before": prev[0], "after": val, "before_episode": prev[1],
+                                      "before_rid": prev[2], "after_rid": run["rid"],
+                                      "before_context": prev[3], "after_context": ctx})
+                last_metric[name] = (val, ep["id"], run["rid"], ctx)
         if drops:
             flags.append("metric_drop")
             ep["drops"] = drops
         # A fresh instruction right after a flagged episode may be a change of direction.
-        if ep["opened_by"] == "instruction" and episodes.index(ep) > 0:
-            prev_ep = episodes[episodes.index(ep) - 1]
+        if ep["opened_by"] == "instruction" and i > 0:
+            prev_ep = episodes[i - 1]
             if any(f in prev_ep["flags"] for f in ("failure", "metric_drop")):
                 flags.append("new_direction")
         ep["flags"] = flags

@@ -26,12 +26,14 @@ import llm  # noqa: E402
 import pipeline  # noqa: E402
 import question  # noqa: E402
 import search  # noqa: E402
+import stitcher  # noqa: E402
 from demo_data import DEMO_PAPER  # noqa: E402
-from store import Diary, RawLog  # noqa: E402
+from store import RAW_KINDS, Diary, RawLog  # noqa: E402
 
 STATIC = os.path.join(HERE, "static")
 STORE = None
 RAW = None
+STITCHER = None
 MAX_RAW_BATCH = 500
 MAX_BODY = 5 * 1024 * 1024
 
@@ -74,7 +76,8 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/api/sources":
             return self.send(200, search.status())
         if p == "/api/status":
-            return self.send(200, {"ai": llm.status(), "search": search.status(), "events": len(STORE.events())})
+            return self.send(200, {"ai": llm.status(), "search": search.status(), "events": len(STORE.events()),
+                                   "stitch": STITCHER.status() if STITCHER else None})
         if p.startswith("/api/jobs/"):
             job = pipeline.get(p.rsplit("/", 1)[-1])
             return self.send(200, job) if job else self.send(404, {"error": "unknown job"})
@@ -91,6 +94,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {"raw": evs})
         if p == "/api/episodes":
             return self.send(200, {"episodes": episodes.segment(RAW.all())})
+        if p == "/api/stitch":
+            return self.send(200, STITCHER.status())
         if p == "/api/demo-paper":
             return self.send(200, {"text": DEMO_PAPER})
         if p == "/api/export":
@@ -124,10 +129,13 @@ class Handler(BaseHTTPRequestHandler):
                 batch = b.get("events") if isinstance(b.get("events"), list) else [b]
                 if len(batch) > MAX_RAW_BATCH:
                     return self.send(400, {"error": "at most %d raw events per request" % MAX_RAW_BATCH})
-                try:
-                    saved = [RAW.add(ev) for ev in batch if isinstance(ev, dict)]
-                except ValueError as e:
-                    return self.send(400, {"error": str(e)})
+                batch = [ev for ev in batch if isinstance(ev, dict)]
+                bad = [ev.get("kind") for ev in batch if ev.get("kind") not in RAW_KINDS]
+                if bad:  # all or nothing, so a batch is never half-stored
+                    return self.send(400, {"error": "unknown raw event kind: %s" % bad[0]})
+                saved = [RAW.add(ev) for ev in batch]
+                if STITCHER:
+                    STITCHER.poke()
                 return self.send(200, {"raw": [e["rid"] for e in saved]})
             if p == "/api/pivot":
                 ev = diary.record_pivot(STORE, b["plan_id"], b.get("links", []), b.get("reason", ""), bool(b.get("skipped")))
@@ -138,11 +146,18 @@ class Handler(BaseHTTPRequestHandler):
             if p == "/api/reset":  # the demo diary has no raw capture behind it
                 STORE.reset_demo()
                 RAW.clear()
+                if STITCHER:
+                    STITCHER.reset()
                 return self.send(200, {"ok": True})
             if p == "/api/clear":  # fresh project: empty diary and raw log
                 STORE.clear()
                 RAW.clear()
+                if STITCHER:
+                    STITCHER.reset()
                 return self.send(200, {"ok": True})
+            if p == "/api/stitch":  # run the stitcher now instead of waiting for the next tick
+                STITCHER.run_once()
+                return self.send(200, STITCHER.status())
             if p == "/api/question":  # synchronous, rules/AI only (kept for scripts)
                 return self.send(200, question.analyse(b.get("question", ""), use_ai))
             if p == "/api/question/start":  # the staged pipeline the UI uses
@@ -179,7 +194,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global STORE, RAW
+    global STORE, RAW, STITCHER
     ap = argparse.ArgumentParser()
     ap.add_argument("--state", default=os.path.join(os.path.dirname(HERE), ".episteme"))
     ap.add_argument("--port", type=int, default=8765)
@@ -187,7 +202,10 @@ def main():
     os.makedirs(a.state, exist_ok=True)
     STORE = Diary(os.path.join(a.state, "diary.json"))
     RAW = RawLog(os.path.join(a.state, "raw.jsonl"))
-    llm.init(a.state)  # also initialises the shared config file
+    llm.init(a.state)  # also initialises the shared config file; before the stitcher, which needs it
+    # EPISTEME_STITCH_AI=0 keeps the stitcher on rules only (no model calls, no API spend).
+    STITCHER = stitcher.Stitcher(STORE, RAW, a.state, use_ai=os.environ.get("EPISTEME_STITCH_AI", "1") != "0")
+    STITCHER.start()
     search.start_poller()
 
     httpd = None
