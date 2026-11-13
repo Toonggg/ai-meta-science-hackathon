@@ -116,11 +116,13 @@ class Diary:
             data["events"] = [e for e in data["events"] if e["id"] != event_id]
             self._write(data)
 
-    def clear(self):
+    def clear(self, project=None):
         with self.lock:
             data = self._read()
             data["events"] = []
             data["next_id"] = 1
+            if project and project.strip():
+                data["project"] = project.strip()[:120]
             self._write(data)
 
     def reset_demo(self):

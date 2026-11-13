@@ -529,7 +529,9 @@ $("#reset-demo").addEventListener("click", async () => {
 });
 $("#clear-diary").addEventListener("click", async () => {
   if (!confirm("Remove all events and raw capture, and start an empty diary? (Export first if you want to keep them.)")) return;
-  await api("/api/clear", {}); $("#prompts").innerHTML = ""; delete $("#confirms").dataset.key;
+  const project = prompt("Project name for the new diary:", $("#project-name").textContent);
+  if (project === null) return; // cancelled: nothing removed
+  await api("/api/clear", { project }); $("#prompts").innerHTML = ""; delete $("#confirms").dataset.key;
   await Promise.all([loadDiary(), loadConfirms(), refreshCapture()]);
 });
 

@@ -162,8 +162,8 @@ class Handler(BaseHTTPRequestHandler):
                 if STITCHER:
                     STITCHER.reset()
                 return self.send(200, {"ok": True})
-            if p == "/api/clear":  # fresh project: empty diary and raw log
-                STORE.clear()
+            if p == "/api/clear":  # fresh project: empty diary and raw log, optionally {"project": "name"}
+                STORE.clear(b.get("project"))
                 RAW.clear()
                 if STITCHER:
                     STITCHER.reset()
