@@ -31,6 +31,7 @@ Segmentation rules (design decision 1, "A + D"):
   * A run error followed within RETRY_WINDOW actions by a re-run of the same
     command is a quick fix, not a boundary.
   * MAX_SIGNIFICANT runs/edits without any boundary split the episode ("cap").
+  * If none of that happened, the end of the agent's turn (stop) closes it.
 
 An episode is final once something after it has started a new episode, or once
 the agent stopped after its closing event. Only final episodes are stitched.
@@ -48,11 +49,15 @@ RETRY_WINDOW = 2
 MAX_SIGNIFICANT = 30
 
 RESULT_LINE = re.compile(r"^\s*RESULT\b(.*)$", re.M)
-KV = re.compile(r"([A-Za-z_][\w.\-@]*)\s*=\s*(\"[^\"]*\"|'[^']*'|\S+)")
+# key=value; a value ends at whitespace, a comma or a semicolon ("RESULT a=0.8, b=0.7" gives both).
+KV = re.compile(r"([A-Za-z_][\w.\-@]*)\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s,;]+)")
+# Numbers that describe the setup, not the outcome: kept as context, never compared as metrics.
+CONTEXT_NAMES = re.compile(r"^(seed|random_state|n|n_\w+|num_\w+|epochs?|folds?|k|lr|learning_rate|batch\w*|"
+                           r"steps?|iter\w*|max_\w+|min_\w+|dim\w*|layers?|version|v\d*|run|trial)$", re.I)
 
 ACK = re.compile(r"^\s*(yes|yep|yeah|ok|okay|sure|continue|go on|go ahead|proceed|do it|do that|sounds good|"
                  r"looks good|lgtm|thanks|thank you|great|perfect|fix (it|that|this|the error|the bug)|try again|"
-                 r"retry|again)\b", re.I)
+                 r"retry|again|please|now|then|and|so|just|alright|cool|nice)\b[\s,.!;:-]*", re.I)
 MAX_ACK_WORDS = 8
 
 CHANGE_WORDS = re.compile(r"\b(instead|switch(ing)?|replace|abandon|drop|rather than|alternative|pivot|"
@@ -76,17 +81,29 @@ def parse_results(output):
         for k, v in KV.findall(line):
             v = v.strip("\"'")
             try:
-                metrics[k] = float(v.rstrip("%"))
+                num = float(v.rstrip("%"))
             except ValueError:
                 context[k] = v
+                continue
+            if CONTEXT_NAMES.match(k):
+                context[k] = v
+            else:
+                metrics[k] = num
     return {"metrics": metrics, "context": context} if (metrics or context) else None
 
 
 def is_trivial(text):
+    """Only pure acknowledgements are trivial: strip "ok", "yes", "go on", "thanks"... and
+    nothing may remain. "ok, now try a transformer" is a real instruction."""
     t = (text or "").strip()
-    if not t:
-        return True
-    return len(t.split()) <= MAX_ACK_WORDS and bool(ACK.match(t)) and not CHANGE_WORDS.search(t)
+    if len(t.split()) > MAX_ACK_WORDS or CHANGE_WORDS.search(t):
+        return not t
+    while t:
+        m = ACK.match(t)
+        if not m or not m.group(0):
+            break
+        t = t[m.end():]
+    return not t.strip(" ,.!?;:-")
 
 
 def is_run(ev):
@@ -190,7 +207,12 @@ def segment(raw):
                 cur["stopped_after_close"] = True
                 cur["final"] = True
             continue
-        if k == "commit":
+        if k == "stop":
+            # The agent handed back without a result, failure or commit (e.g. it edited code and
+            # asked a question). Finish the episode now so its plan appears while the work happens.
+            cur["close_reason"], cur["closed_at"] = "stop", ev["rid"]
+            cur["stopped_after_close"] = cur["final"] = True
+        elif k == "commit":
             cur["close_reason"], cur["closed_at"] = "commit", ev["rid"]
         elif is_run(ev) and parse_results(ev.get("output")):
             cur["close_reason"], cur["closed_at"] = "result", ev["rid"]

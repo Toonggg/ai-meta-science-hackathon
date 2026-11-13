@@ -155,6 +155,35 @@ class RuleTest(unittest.TestCase):
                                    instr("B"), act(command="python a.py", output="RESULT val_loss=0.25")))
         self.assertNotIn("metric_drop", eps[1]["flags"])
 
+    # -- audit fixes: L7, L8, L9, L10, L12 ----------------------------------------
+    def test_ack_followed_by_a_real_instruction_is_not_trivial(self):
+        for t in ["ok, use XGBoost", "ok now try a transformer", "continue with the scaffold split",
+                  "fix it by dropping the leaky feature", "yes, but use 5 folds"]:
+            self.assertFalse(episodes.is_trivial(t), t)
+        for t in ["ok go on", "yes please", "Great, thanks!", "ok. continue", "sure, go ahead"]:
+            self.assertTrue(episodes.is_trivial(t), t)
+
+    def test_setup_numbers_are_context_not_metrics(self):
+        r = episodes.parse_results("RESULT auroc=0.81 seed=42 n=1200 epochs=10 lr=0.001 fold=3")
+        self.assertEqual(r["metrics"], {"auroc": 0.81})
+        self.assertEqual(r["context"], {"seed": "42", "n": "1200", "epochs": "10", "lr": "0.001", "fold": "3"})
+        eps = episodes.segment(raw(instr("A"), act(command="python a.py", output="RESULT auroc=0.8 seed=42"), STOP,
+                                   instr("B"), act(command="python a.py", output="RESULT auroc=0.8 seed=7")))
+        self.assertNotIn("metric_drop", eps[1]["flags"])
+
+    def test_commas_between_values(self):
+        r = episodes.parse_results("RESULT accuracy=0.8, f1=0.7; split=random")
+        self.assertEqual(r["metrics"], {"accuracy": 0.8, "f1": 0.7})
+        self.assertEqual(r["context"], {"split": "random"})
+
+    def test_stop_finishes_an_episode_without_a_result(self):
+        eps = episodes.segment(raw(instr("Refactor the loader"), act("Write", files=["load.py"]),
+                                   say("Done; shall I run it?"), STOP))
+        self.assertEqual((eps[0]["close_reason"], eps[0]["final"]), ("stop", True))
+        eps = episodes.segment(raw(instr("Refactor the loader"), act("Write", files=["load.py"]), STOP,
+                                   instr("yes"), act(command="python a.py", output="RESULT acc=0.9")))
+        self.assertEqual([e["opened_by"] for e in eps], ["instruction", "continuation"])
+
     def test_parse_results(self):
         r = episodes.parse_results("epoch 3\nRESULT spearman=0.71 split=random n='1,204'\nRESULT acc=91%")
         self.assertEqual(r["metrics"], {"spearman": 0.71, "acc": 91.0})

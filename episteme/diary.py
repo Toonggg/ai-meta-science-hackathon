@@ -18,13 +18,30 @@ OPS = {">=": lambda a, b: a >= b, "≥": lambda a, b: a >= b, "<=": lambda a, b:
 EXPECT = re.compile(r"(?P<metric>[A-Za-z][\w@\-]*)\s*(?P<op>>=|<=|≥|≤|>|<|=)\s*(?P<val>-?\d*\.?\d+)")
 
 
+EXPECT_CUE = re.compile(r"\b(expect\w*|target|aim(ing)? for|hypothes\w+|predict\w*|goal|hope|should (reach|get|"
+                        r"be|beat|exceed|hit)|at least|success means)\b", re.I)
+
+
+def extract_expectation(text):
+    """The expectation stated in free text (e.g. a captured instruction), or None.
+    Only a comparison after a cue word counts, and never a plain "=": "lr=0.001" or
+    "significant at p<0.05" in a sentence without a cue are settings, not expectations."""
+    for cue in EXPECT_CUE.finditer(text or ""):
+        window = text[cue.end():cue.end() + 80]
+        for m in EXPECT.finditer(window):
+            if m.group("op") != "=":
+                return m.group(0)
+    return None
+
+
 def check_expectation(expectation, result):
     """Return (metric, op, expected, observed, holds) or None if not comparable."""
     m = EXPECT.search(expectation or "")
     if not m:
         return None
     metric = m.group("metric")
-    r = re.search(re.escape(metric) + r"\D{0,20}?(-?\d*\.\d+|-?\d+)", result or "", re.I)
+    # Whole-word match, so an expectation on "p" never reads the number after "spearman".
+    r = re.search(r"(?<![\w@\-])" + re.escape(metric) + r"(?![\w@\-])\D{0,20}?(-?\d*\.\d+|-?\d+)", result or "", re.I)
     if not r:
         return None
     expected, observed = float(m.group("val")), float(r.group(1))

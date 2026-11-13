@@ -141,3 +141,22 @@ class ConfirmTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExpectationTest(unittest.TestCase):
+    """Audit fix L10: only cued comparisons are expectations, and metric names match whole words."""
+
+    def test_extract(self):
+        cases = {
+            "Train with lr=0.001 and batch 32. I expect auroc >= 0.75.": "auroc >= 0.75",
+            "Report whether it is significant at p<0.05": None,
+            "Use lr=0.001": None,
+            "Target: spearman > 0.6 on the family split": "spearman > 0.6",
+            "This should beat rmse < 2.5": "rmse < 2.5",
+        }
+        for text, want in cases.items():
+            self.assertEqual(diary.extract_expectation(text), want, text)
+
+    def test_whole_word_metric(self):
+        self.assertIsNone(diary.check_expectation("p<0.05", "spearman 0.71"))
+        self.assertEqual(diary.check_expectation("auroc >= 0.75", "AUROC 0.54 (5-fold CV)")[4], False)

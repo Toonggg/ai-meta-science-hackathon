@@ -259,9 +259,9 @@ class Stitcher:
                       raw_ids=[rid], ts=raw_by.get(rid, {}).get("ts"))
             if len(text.strip()) > len(ev["title"]):
                 ev["detail"] = text.strip()
-            m = diary.EXPECT.search(text)
-            if m:
-                ev["expectation"] = m.group(0)
+            expectation = diary.extract_expectation(text)
+            if expectation:
+                ev["expectation"] = expectation
             plan, _ = self._add(ev, st)
             st["plan"] = plan["id"]
 
