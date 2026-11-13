@@ -12,16 +12,30 @@ Event shape (all fields optional except id/type/title/ts):
     result      observed outcome, e.g. "AUROC 0.54 (5-fold CV)" (runs only)
     status      ok | failed
     code, params, data {name, version, hash}, links [event ids]
+
+Fields added for automatic capture:
+    actor        who stated it: human | agent | system (episteme's own rules)
+    confirmed_by "human" when a person confirmed an agent-stated reason with one click
+    episode_id   the episode (see episodes.py) this event was stitched from
+    raw_ids      raw events (raw.jsonl) that are the evidence for this event
+    classified_by {"model": ..., "at": ...} when a model wrote or classified it
+
+Raw capture lives in a separate append-only file (raw.jsonl, see RawLog) so the
+diary itself stays small: it holds decisions, raw.jsonl holds everything.
 """
 
 import json
 import os
+import re
 import threading
 from datetime import datetime, timezone
 
 from demo_data import demo_events
 
 VALID_TYPES = {"plan", "run", "surprise", "pivot", "note", "artifact", "question"}
+VALID_ACTORS = {"human", "agent", "system"}
+ACTOR_FOR_SOURCE = {"manual": "human", "episteme": "system", "agent": "agent"}
+RAW_KINDS = {"instruction", "action", "agent_text", "commit", "stop"}
 
 
 def now_iso():
@@ -67,9 +81,20 @@ class Diary:
             ev.setdefault("ts", now_iso())
             ev.setdefault("source", "manual")
             ev.setdefault("provenance", "stated")
+            if ev["provenance"] not in ("stated", "inferred"):
+                ev["provenance"] = "stated"
+            if not isinstance(ev["source"], str) or not re.fullmatch(r"[a-z_]{1,20}", ev["source"]):
+                ev["source"] = "manual"
+            if "links" in ev:  # only real event ids: they end up in the page's markup
+                links = ev["links"] if isinstance(ev["links"], list) else []
+                ev["links"] = [l for l in links if isinstance(l, str) and re.fullmatch(r"E\d{1,7}", l)]
+            if ev.get("actor") not in VALID_ACTORS:
+                ev.pop("actor", None)
+                if ev["source"] in ACTOR_FOR_SOURCE:
+                    ev["actor"] = ACTOR_FOR_SOURCE[ev["source"]]
             if ev.get("type") not in VALID_TYPES:
                 ev["type"] = "note"
-            ev["title"] = (ev.get("title") or "(untitled)").strip()
+            ev["title"] = (str(ev.get("title") or "") or "(untitled)").strip()
             idx = len(data["events"])
             if before_id:
                 for i, e in enumerate(data["events"]):
@@ -80,24 +105,126 @@ class Diary:
             self._write(data)
         return ev
 
+    def update(self, event_id, fields, remove=()):
+        """Change fields of one event in place (keeps its id and position)."""
+        with self.lock:
+            data = self._read()
+            for e in data["events"]:
+                if e["id"] == event_id:
+                    e.update({k: v for k, v in fields.items() if k not in ("id", "step")})
+                    for k in remove:
+                        e.pop(k, None)
+                    self._write(data)
+                    return e
+        raise KeyError(event_id)
+
     def delete(self, event_id):
         with self.lock:
             data = self._read()
             data["events"] = [e for e in data["events"] if e["id"] != event_id]
             self._write(data)
 
-    def clear(self):
+    def clear(self, project=None):
         with self.lock:
             data = self._read()
             data["events"] = []
             data["next_id"] = 1
+            if project and project.strip():
+                data["project"] = project.strip()[:120]
             self._write(data)
 
     def reset_demo(self):
         events = demo_events()
+        for e in events:  # the demo was logged by hand: everything is the researcher's except Episteme's own flags
+            e.setdefault("actor", "system" if e.get("source") == "episteme" else "human")
         with self.lock:
             data = self._read()
             data["project"] = "Readmission prediction from clinical notes"
             data["events"] = events
             data["next_id"] = len(events) + 1
             self._write(data)
+
+
+class RawLog:
+    """Append-only raw capture log: one JSON object per line in raw.jsonl.
+
+    Never rewritten, so a crash can at worst lose the line being written.
+    Raw ids ("R1", "R2", ...) are stable and never reused.
+    """
+
+    def __init__(self, path):
+        self.path = path
+        self.lock = threading.Lock()
+        self._next = self._count() + 1
+
+    def _count(self):
+        if not os.path.exists(self.path):
+            return 0
+        n = 0
+        with open(self.path, encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    n += 1
+        return n
+
+    STR_FIELDS = ("ts", "source", "session", "text", "tool", "command", "intent", "output", "commit", "actor")
+    MAX_LEN = 20000
+
+    @classmethod
+    def clean(cls, ev):
+        """Coerce fields to the types episodes.py expects, so one malformed event from a
+        hook, replay file or curl call cannot break segmentation for the whole log."""
+        ev = dict(ev)
+        for k in cls.STR_FIELDS:
+            if k in ev and not isinstance(ev[k], str):
+                ev[k] = "" if ev[k] is None else (json.dumps(ev[k]) if isinstance(ev[k], (dict, list)) else str(ev[k]))
+            if isinstance(ev.get(k), str) and len(ev[k]) > cls.MAX_LEN:
+                ev[k] = ev[k][-cls.MAX_LEN:] if k == "output" else ev[k][:cls.MAX_LEN]
+        if "files" in ev:
+            files = ev["files"] if isinstance(ev["files"], list) else [ev["files"]]
+            ev["files"] = [str(f) for f in files if f not in (None, "")][:500]
+        if "error" in ev:
+            ev["error"] = ev["error"] is True or str(ev["error"]).lower() in ("true", "1", "yes")
+        return ev
+
+    def add(self, ev):
+        ev = self.clean({k: v for k, v in ev.items() if v not in (None, "", [], {})})
+        if ev.get("kind") not in RAW_KINDS:
+            raise ValueError("raw event kind must be one of: %s" % ", ".join(sorted(RAW_KINDS)))
+        ev.pop("rid", None)
+        ev.setdefault("ts", now_iso())
+        ev.setdefault("source", "agent")
+        with self.lock:
+            ev["rid"] = "R%d" % self._next
+            self._next += 1
+            with open(self.path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(ev, ensure_ascii=False) + "\n")
+        return ev
+
+    def all(self):
+        with self.lock:
+            if not os.path.exists(self.path):
+                return []
+            out = []
+            with open(self.path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        ev = json.loads(line)
+                    except ValueError:
+                        continue  # a torn last line from a crash: skip it
+                    if isinstance(ev, dict) and isinstance(ev.get("rid"), str):
+                        out.append(self.clean(ev))  # also repairs events stored before cleaning existed
+            return out
+
+    def get(self, rids):
+        want = set(rids)
+        return [e for e in self.all() if e["rid"] in want]
+
+    def clear(self):
+        with self.lock:
+            if os.path.exists(self.path):
+                os.remove(self.path)
+            self._next = 1

@@ -11,6 +11,8 @@ import argparse
 import json
 import mimetypes
 import os
+import re
+import secrets
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -20,17 +22,45 @@ sys.path.insert(0, HERE)
 
 import claims  # noqa: E402
 import diary  # noqa: E402
+import episodes  # noqa: E402
 import export  # noqa: E402
 import llm  # noqa: E402
 import pipeline  # noqa: E402
 import question  # noqa: E402
 import search  # noqa: E402
+import stitcher  # noqa: E402
 from demo_data import DEMO_PAPER  # noqa: E402
-from store import Diary  # noqa: E402
+from store import RAW_KINDS, Diary, RawLog  # noqa: E402
 
 STATIC = os.path.join(HERE, "static")
 STORE = None
+RAW = None
+STITCHER = None
+MAX_RAW_BATCH = 500
 MAX_BODY = 5 * 1024 * 1024
+
+# A random token per server start, embedded in the page. Actions only a person at the page should
+# take need it; capture hooks and the Task 1/3 routes do not. Written to .episteme/token for local
+# tools (tools/replay.py). It stops other web pages and naive scripts; anything that can read the
+# user's files can read it too.
+TOKEN = secrets.token_urlsafe(24)
+NEEDS_TOKEN = {"/api/confirm", "/api/pivot", "/api/delete", "/api/reset", "/api/clear", "/api/settings", "/api/sources"}
+# Attribution is decided by Episteme (stitcher, confirm flow), never taken from a posted event.
+ATTRIBUTION_FIELDS = ("actor", "confirmation", "confirmed_by", "confirmed_at", "skipped_at", "classified_by",
+                      "needs_confirmation", "quote", "model_summary", "proposed_reason", "pending", "episode_id",
+                      "raw_ids")
+
+
+def wipe(reset_diary):
+    """Reset the diary and empty the raw log under the stitcher's lock, so a stitching pass
+    can never write into a half-cleared diary."""
+    def both():
+        reset_diary()
+        RAW.clear()
+    if STITCHER:
+        STITCHER.reset(also=both)
+    else:
+        both()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -59,24 +89,56 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(n) if n else b"{}"
         return json.loads(raw.decode() or "{}")
 
+    def own_hosts(self):
+        port = self.server.server_address[1]
+        return {"127.0.0.1:%d" % port, "localhost:%d" % port}
+
+    def host_ok(self):
+        # DNS rebinding: a foreign site that resolves its name to 127.0.0.1 still sends its own Host.
+        return (self.headers.get("host") or "").lower() in self.own_hosts()
+
     def same_origin(self):
-        # Block cross-site writes from other web pages (no CORS is offered).
+        # Block writes from other web pages, including other local apps on other ports (no CORS is offered).
         origin = self.headers.get("origin")
-        return not origin or origin.startswith(("http://127.0.0.1:", "http://localhost:"))
+        return not origin or origin.lower() in {"http://" + h for h in self.own_hosts()}
+
+    def has_token(self):
+        return secrets.compare_digest(self.headers.get("x-episteme-token") or "", TOKEN)
 
     # -- routes ------------------------------------------------------------
     def do_GET(self):
+        if not self.host_ok():
+            return self.send(403, {"error": "unexpected Host header"})
         u = urlparse(self.path)
         p = u.path
         if p == "/api/sources":
             return self.send(200, search.status())
         if p == "/api/status":
-            return self.send(200, {"ai": llm.status(), "search": search.status(), "events": len(STORE.events())})
+            return self.send(200, {"ai": llm.status(), "search": search.status(), "events": len(STORE.events()),
+                                   "stitch": STITCHER.status() if STITCHER else None})
         if p.startswith("/api/jobs/"):
             job = pipeline.get(p.rsplit("/", 1)[-1])
             return self.send(200, job) if job else self.send(404, {"error": "unknown job"})
         if p == "/api/events":
-            return self.send(200, STORE.snapshot())
+            snap = STORE.snapshot()
+            for e in snap["events"]:
+                e["who"] = diary.who(e)  # display only, never stored
+            return self.send(200, snap)
+        if p == "/api/raw":  # ?ids=R1,R2  or  ?since=R10  or everything
+            q = parse_qs(u.query)
+            if q.get("ids"):
+                return self.send(200, {"raw": RAW.get(q["ids"][0].split(","))})
+            evs = RAW.all()
+            if q.get("since"):
+                n = int(q["since"][0].lstrip("Rr") or 0)
+                evs = [e for e in evs if int(e["rid"][1:]) > n]
+            return self.send(200, {"raw": evs})
+        if p == "/api/episodes":
+            return self.send(200, {"episodes": episodes.segment(RAW.all())})
+        if p == "/api/stitch":
+            return self.send(200, STITCHER.status())
+        if p == "/api/prompts":  # pivots waiting for the researcher's confirm / edit / skip
+            return self.send(200, {"prompts": diary.prompts(STORE.snapshot()["events"])})
         if p == "/api/demo-paper":
             return self.send(200, {"text": DEMO_PAPER})
         if p == "/api/export":
@@ -93,31 +155,68 @@ class Handler(BaseHTTPRequestHandler):
         return self.static(p)
 
     def do_POST(self):
+        if not self.host_ok():
+            return self.send(403, {"error": "unexpected Host header"})
         if not self.same_origin():
             return self.send(403, {"error": "cross-origin request refused"})
         p = urlparse(self.path).path
+        if p in NEEDS_TOKEN and not self.has_token():
+            return self.send(403, {"error": "this action is only available from the Episteme page"})
         try:
             b = self.body()
         except ValueError as e:
             return self.send(400, {"error": str(e)})
+        if not isinstance(b, dict):
+            return self.send(400, {"error": "expected a JSON object"})
         use_ai = bool(b.get("use_ai", True))
         try:
             if p == "/api/events":
-                ev = STORE.add(b.get("event", b))
+                ev = b.get("event", b)
+                if not isinstance(ev, dict):
+                    return self.send(400, {"error": "expected a JSON object"})
+                ev = {k: v for k, v in ev.items() if k not in ATTRIBUTION_FIELDS}
+                src = ev.get("source")
+                if not self.has_token() and (src in ("manual", "episteme") or not isinstance(src, str)
+                                             or not re.fullmatch(r"[a-z_]{1,20}", src)):
+                    ev["source"] = "tool"  # an outside script: not the researcher at the page, not Episteme
+                ev = STORE.add(ev)
                 auto, prompts = diary.after_add(STORE, ev)
                 return self.send(200, {"event": ev, "auto": auto, "prompts": prompts})
+            if p == "/api/raw":  # capture tools: {"events": [...]} or a single event
+                batch = b.get("events") if isinstance(b.get("events"), list) else [b]
+                if len(batch) > MAX_RAW_BATCH:
+                    return self.send(400, {"error": "at most %d raw events per request" % MAX_RAW_BATCH})
+                batch = [ev for ev in batch if isinstance(ev, dict)]
+                bad = [ev.get("kind") for ev in batch if ev.get("kind") not in RAW_KINDS]
+                if bad:  # all or nothing, so a batch is never half-stored
+                    return self.send(400, {"error": "unknown raw event kind: %s" % bad[0]})
+                saved = [RAW.add(ev) for ev in batch]
+                if STITCHER:
+                    STITCHER.poke()
+                return self.send(200, {"raw": [e["rid"] for e in saved]})
+            if p == "/api/confirm":  # {"id": "E8", "action": "confirm" | "edit" | "skip", "reason": "..."}
+                try:
+                    ev = diary.confirm(STORE, b["id"], b.get("action", ""), b.get("reason", ""))
+                except ValueError as e:
+                    return self.send(400, {"error": str(e)})
+                if STITCHER:
+                    STITCHER.human_handled(ev)
+                return self.send(200, {"event": ev})
             if p == "/api/pivot":
                 ev = diary.record_pivot(STORE, b["plan_id"], b.get("links", []), b.get("reason", ""), bool(b.get("skipped")))
                 return self.send(200, {"event": ev})
             if p == "/api/delete":
                 STORE.delete(b["id"])
                 return self.send(200, {"ok": True})
-            if p == "/api/reset":
-                STORE.reset_demo()
+            if p == "/api/reset":  # the demo diary has no raw capture behind it
+                wipe(lambda: STORE.reset_demo())
                 return self.send(200, {"ok": True})
-            if p == "/api/clear":
-                STORE.clear()
+            if p == "/api/clear":  # fresh project: empty diary and raw log, optionally {"project": "name"}
+                wipe(lambda: STORE.clear(b.get("project")))
                 return self.send(200, {"ok": True})
+            if p == "/api/stitch":  # run the stitcher now instead of waiting for the next tick
+                STITCHER.run_once()
+                return self.send(200, STITCHER.status())
             if p == "/api/question":  # synchronous, rules/AI only (kept for scripts)
                 return self.send(200, question.analyse(b.get("question", ""), use_ai))
             if p == "/api/question/start":  # the staged pipeline the UI uses
@@ -150,18 +249,24 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(404, "not found", "text/plain")
         with open(full, "rb") as f:
             data = f.read()
+        if full == os.path.join(STATIC, "index.html"):
+            data = data.replace(b"__EPISTEME_TOKEN__", TOKEN.encode())
         return self.send(200, data, mimetypes.guess_type(full)[0] or "application/octet-stream")
 
 
 def main():
-    global STORE
+    global STORE, RAW, STITCHER
     ap = argparse.ArgumentParser()
     ap.add_argument("--state", default=os.path.join(os.path.dirname(HERE), ".episteme"))
     ap.add_argument("--port", type=int, default=8765)
     a = ap.parse_args()
     os.makedirs(a.state, exist_ok=True)
     STORE = Diary(os.path.join(a.state, "diary.json"))
-    llm.init(a.state)  # also initialises the shared config file
+    RAW = RawLog(os.path.join(a.state, "raw.jsonl"))
+    llm.init(a.state)  # also initialises the shared config file; before the stitcher, which needs it
+    # EPISTEME_STITCH_AI=0 keeps the stitcher on rules only (no model calls, no API spend).
+    STITCHER = stitcher.Stitcher(STORE, RAW, a.state, use_ai=os.environ.get("EPISTEME_STITCH_AI", "1") != "0")
+    STITCHER.start()
     search.start_poller()
 
     httpd = None
@@ -176,6 +281,9 @@ def main():
     url = "http://127.0.0.1:%d" % httpd.server_address[1]
     with open(os.path.join(a.state, "url"), "w") as f:
         f.write(url)
+    fd = os.open(os.path.join(a.state, "token"), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:  # for local tools such as tools/replay.py
+        f.write(TOKEN)
     sys.stderr.write("Episteme listening on %s (AI: %s)\n" % (url, llm.status()["label"]))
     sys.stderr.flush()
     try:

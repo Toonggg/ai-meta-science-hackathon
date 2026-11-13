@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="episteme-token" content="__EPISTEME_TOKEN__">
 <title>Episteme: research flight recorder</title>
 <script>document.documentElement.dataset.theme = localStorage.getItem("theme") || "tokyo-night";</script>
 <link rel="stylesheet" href="/themes.css">
@@ -66,7 +67,7 @@
       <div class="col-main">
         <div class="intro">
           <h2 id="project-name">Research diary</h2>
-          <p>Plans, runs, surprises and pivots, with the <i>why</i>. Stated entries were recorded at the time; inferred ones were reconstructed afterwards.</p>
+          <p>Plans, runs, surprises and pivots, with the <i>why</i>. Each entry shows who stated it: the researcher, the AI agent, or Episteme's own inference (reconstructed, lower trust).</p>
         </div>
         <form id="add-form" class="card add">
           <div class="row">
@@ -90,6 +91,16 @@
           </div>
         </form>
         <div id="prompts"></div>
+        <div id="confirms"></div>
+        <div class="tl-head">
+          <div class="dlg-tabs" id="view-pick">
+            <button type="button" data-view="all" class="active">All</button>
+            <button type="button" data-view="decisions" title="Plans, pivots, surprises, notes and failed runs">Decisions</button>
+            <button type="button" data-view="raw" title="Everything the capture hooks recorded, grouped into episodes">Raw capture</button>
+          </div>
+          <span class="muted small" id="capture-status"></span>
+        </div>
+        <div id="raw-view" hidden></div>
         <ol id="timeline"></ol>
       </div>
 
@@ -112,7 +123,7 @@
             <a class="btn" href="/api/export?format=json">Raw JSON</a>
           </div>
           <h3>Capture from other tools</h3>
-          <p class="muted">Any script, notebook or agent hook can log events:</p>
+          <p class="muted">Claude Code and git: <code>python3 capture/install.py &lt;project&gt;</code>. Any other script, notebook or agent can log events:</p>
           <pre class="snippet" id="curl-snippet"></pre>
           <div class="btns">
             <button id="reset-demo" class="ghost">Reload demo session</button>

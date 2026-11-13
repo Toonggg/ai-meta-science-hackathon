@@ -5,12 +5,14 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const TYPE_LABEL = { plan: "Plan", run: "Run", surprise: "Surprise", pivot: "Pivot", note: "Note", artifact: "Artifact", question: "Question" };
-const SOURCE_LABEL = { chat: "AI chat", colab: "Colab", github: "GitHub", manual: "manual", agent: "agent hook", episteme: "Episteme" };
+const SOURCE_LABEL = { chat: "AI chat", colab: "Colab", github: "GitHub", manual: "manual", agent: "agent hook", episteme: "Episteme", git: "git hook", tool: "script" };
 
 let state = { events: [], status: null };
 
+// Per-start token from the server: marks writes as coming from this page (confirm, settings, clear...).
+const TOKEN = document.querySelector('meta[name="episteme-token"]')?.content || "";
 async function api(path, body) {
-  const opts = body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
+  const opts = body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json", "x-episteme-token": TOKEN }, body: JSON.stringify(body) };
   const r = await fetch(path, opts);
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || r.statusText);
@@ -261,37 +263,111 @@ $("#st-check-all").addEventListener("click", async (e) => {
 async function loadDiary() {
   const snap = await api("/api/events");
   state.events = snap.events;
+  state.sig = JSON.stringify(snap.events);
   $("#project-name").textContent = snap.project || "Research diary";
   renderTimeline();
+}
+
+// Who stated it: a short badge, the full sentence (from the server) on hover.
+function whoBadge(e) {
+  let cls = "prov", txt;
+  if (e.pending) { cls += " pending"; txt = "pending"; }
+  else if (e.confirmation === "edited" || e.actor === "human") txt = "researcher";
+  else if (e.actor === "agent") txt = e.confirmation === "confirmed" ? "agent ✓" : "agent";
+  else if (e.actor === "system" || e.provenance === "inferred") { cls += " inferred"; txt = "inferred"; }
+  else { cls += " " + (e.provenance || ""); txt = e.provenance || "stated"; }
+  if (e.confirmation === "skipped") txt += " · unconfirmed";
+  return `<span class="${esc(cls)}" title="${esc(e.who || "")}">${esc(txt)}</span>`;
 }
 
 function evCard(e) {
   const fields = [];
   if (e.expectation) fields.push(["Expected", esc(e.expectation)]);
   if (e.detail) fields.push([e.type === "pivot" ? "Why" : "Detail", esc(e.detail)]);
+  if (e.quote && e.quote !== e.detail) fields.push(["In their words", `<span class="quote">“${esc(e.quote)}”</span>`]);
+  if (e.model_summary) fields.push(["Model's summary", esc(e.model_summary)]);
+  if (e.proposed_reason) fields.push(["Proposed", esc(e.proposed_reason)]);
+  if (e.who && e.actor) fields.push(["Stated by", esc(e.who)]);
+  if (e.classified_by) fields.push(["Classified by", esc(`${e.classified_by.model} · ${e.classified_by.at}`)]);
   if (e.result) fields.push(["Result", esc(e.result)]);
   if (e.status) fields.push(["Status", `<span class="${e.status === "failed" ? "status-failed" : ""}">${esc(e.status)}</span>`]);
   if (e.params) fields.push(["Parameters", esc(Object.entries(e.params).map(([k, v]) => `${k}=${v}`).join(", "))]);
   if (e.data) fields.push(["Data", esc(`${e.data.name} v${e.data.version} (${e.data.hash})`)]);
-  if (e.links?.length) fields.push(["Linked to", e.links.map((l) => `<button class="ref" data-ref="${l}">${l}</button>`).join(" ")]);
+  if (e.links?.length) fields.push(["Linked to", e.links.map((l) => `<button class="ref" data-ref="${esc(l)}">${esc(l)}</button>`).join(" ")]);
+  if (e.raw_ids?.length) fields.push(["Raw evidence", `<button class="ref" data-raw="${esc(e.raw_ids.join(","))}" title="Show what the capture hooks recorded">${esc(e.raw_ids.join(" "))}</button>`]);
   const time = new Date(e.ts);
   const when = isNaN(time) ? e.ts : time.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  return `<li class="ev t-${e.type}" id="ev-${e.id}" data-id="${e.id}">
-    <span class="dot">${e.step}</span>
+  const id = esc(e.id);
+  return `<li class="ev t-${esc(e.type)}" id="ev-${id}" data-id="${id}">
+    <span class="dot">${esc(e.step)}</span>
     <div class="card">
-      <div class="top"><span class="chip">${TYPE_LABEL[e.type] || e.type}</span><span class="title">${esc(e.title)}</span>
-        <button class="del" title="Delete event" data-del="${e.id}">×</button></div>
-      <div class="meta"><span>${e.id}</span><span>${esc(when)}</span><span>via ${esc(SOURCE_LABEL[e.source] || e.source)}</span>
-        <span class="prov ${e.provenance}" title="${e.provenance === "stated" ? "Recorded at the time" : "Reconstructed afterwards: lower trust"}">${e.provenance}</span>
+      <div class="top"><span class="chip">${esc(TYPE_LABEL[e.type] || e.type)}</span><span class="title">${esc(e.title)}</span>
+        <button class="del" title="Delete event" data-del="${id}">×</button></div>
+      <div class="meta"><span>${id}</span><span>${esc(when)}</span><span>via ${esc(SOURCE_LABEL[e.source] || e.source)}</span>
+        ${whoBadge(e)}
         ${e.result ? `<span>→ ${esc(e.result.length > 60 ? e.result.slice(0, 58) + "…" : e.result)}</span>` : ""}</div>
       <div class="body"><dl>${fields.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
         ${e.code ? `<pre><code>${esc(e.code)}</code></pre>` : ""}</div>
     </div></li>`;
 }
 
+// View switch: all events / decisions only / raw capture grouped into episodes.
+const isDecision = (e) => ["plan", "pivot", "surprise", "note", "question"].includes(e.type) || e.status === "failed";
+let view = "all";
+try { view = localStorage.getItem("diary-view") || "all"; } catch (_) { /* storage blocked: default view */ }
+
 function renderTimeline() {
   const tl = $("#timeline");
-  tl.innerHTML = state.events.length ? state.events.map(evCard).join("") : `<li class="empty">Empty diary. Add a plan above, or stress-test a question in step 1 and start from there.</li>`;
+  $$("#view-pick button").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+  tl.hidden = view === "raw";
+  $("#raw-view").hidden = view !== "raw";
+  if (view === "raw") return renderRaw();
+  const shown = view === "decisions" ? state.events.filter(isDecision) : state.events;
+  tl.innerHTML = shown.length ? shown.map(evCard).join("") : state.events.length
+    ? `<li class="empty">No decisions yet. Switch to All to see every event.</li>`
+    : `<li class="empty">Empty diary. Add a plan above, or stress-test a question in step 1 and start from there.</li>`;
+  renderCaptureStatus();
+}
+
+$("#view-pick").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-view]");
+  if (!b) return;
+  view = b.dataset.view;
+  try { localStorage.setItem("diary-view", view); } catch (_) { /* fine without it */ }
+  renderTimeline();
+});
+
+const RAW_KIND = { instruction: "instruction", action: "action", agent_text: "agent says", commit: "commit", stop: "turn ends" };
+function rawLine(r) {
+  const what = r.kind === "action" ? `${r.tool || ""} ${r.command || (r.files || []).join(", ")}`
+    : r.kind === "commit" ? `${(r.commit || "").slice(0, 7)} ${r.text || ""}` : (r.text || "");
+  const out = (r.output || "").trim().split("\n").filter(Boolean).slice(-2).join(" ⏎ ");
+  return `${r.rid.padEnd(5)} ${(RAW_KIND[r.kind] || r.kind).padEnd(12)} ${what.trim().slice(0, 160)}${r.error ? "  [error]" : ""}${out && r.kind === "action" ? "\n" + " ".repeat(19) + "→ " + out.slice(0, 160) : ""}`;
+}
+
+async function renderRaw() {
+  const box = $("#raw-view");
+  const [{ raw }, { episodes }] = await Promise.all([api("/api/raw"), api("/api/episodes")]);
+  state.rawCount = raw.length;
+  const byId = Object.fromEntries(raw.map((r) => [r.rid, r]));
+  const CLOSE = { result: "closed by a result", error: "closed by a failure", commit: "closed by a commit", cap: "split (too long)",
+    next_instruction: "ended by the next instruction", next_activity: "ended by new activity" };
+  box.innerHTML = episodes.length ? episodes.map((ep) => `<div class="card">
+      <h3>${esc(ep.id)} <span class="muted small">${esc(CLOSE[ep.close_reason] || "still open")}${ep.final ? "" : " · not stitched yet"}</span>
+        ${ep.flags.map((f) => `<span class="srcchip">${esc(f.replace("_", " "))}</span>`).join("")}</h3>
+      <pre class="snippet">${esc(ep.raw_ids.map((id) => rawLine(byId[id])).join("\n"))}</pre></div>`).join("")
+    : `<div class="empty">Nothing captured yet. Switch capture on with <code>python3 capture/install.py &lt;project&gt;</code>.</div>`;
+  renderCaptureStatus();
+}
+
+function renderCaptureStatus() {
+  const s = state.stitch;
+  const el = $("#capture-status");
+  if (!s || !s.stitched) { el.textContent = ""; return; }
+  const parts = [`${s.stitched} episode${s.stitched === 1 ? "" : "s"} captured`];
+  if (s.pending) parts.push(`${s.pending} pivot${s.pending === 1 ? "" : "s"} waiting for a model`);
+  parts.push(s.model ? `classified by ${s.model}` : "rules only (no model)");
+  el.innerHTML = esc(parts.join(" · ")) + (s.last_error ? ` · <span class="warn-note">${esc(s.last_error)}</span>` : "");
 }
 
 function flash(id) {
@@ -304,6 +380,16 @@ function flash(id) {
 }
 
 document.addEventListener("click", async (e) => {
+  const rawBtn = e.target.closest("[data-raw]");
+  if (rawBtn) { // show / hide the captured raw events behind a diary event
+    e.stopPropagation();
+    const body = rawBtn.closest(".body");
+    const shown = $(".raw-out", body);
+    if (shown) return shown.remove();
+    const { raw } = await api("/api/raw?ids=" + encodeURIComponent(rawBtn.dataset.raw));
+    body.insertAdjacentHTML("beforeend", `<pre class="raw-out">${esc(raw.map(rawLine).join("\n") || "Not in the raw log (it may have been cleared).")}</pre>`);
+    return;
+  }
   const ref = e.target.closest(".ref");
   if (ref) { e.stopPropagation(); return flash(ref.dataset.ref); }
   const del = e.target.closest("[data-del]");
@@ -369,6 +455,65 @@ function showPrompts(prompts) {
   }
 }
 
+// one-click confirmation of pivots the agent stated or the rules flagged
+function confirmCard(p) {
+  const step = esc(p.step), id = esc(p.id);
+  const ask = p.pending ? `Why did the approach change at step ${step}?` : `Is this the reason for step ${step}?`;
+  const body = p.pending
+    ? `<p class="muted small">Flagged by rules; no model has checked it yet. Write the reason in your words, or skip.</p>`
+    : `<p class="quote">“${esc(p.reason)}”</p>${p.model_summary ? `<p class="muted small">Model's summary: ${esc(p.model_summary)}</p>` : ""}`;
+  return `<div class="card prompt" data-confirm="${id}">
+    <h4>${ask}</h4>
+    <div class="muted small"><button class="ref" data-ref="${id}">${id}</button> ${esc(p.title)} · ${esc(p.who)}</div>
+    ${body}
+    <form class="row"${p.pending ? "" : " hidden"}><input placeholder="The reason, in your words" autocomplete="off">
+      <button class="primary">Save reason</button></form>
+    <div class="btns">
+      ${p.actions.includes("confirm") ? `<button type="button" class="primary" data-act="confirm">✔ Confirm</button>` : ""}
+      ${p.pending ? "" : `<button type="button" class="ghost" data-act="edit">✎ Edit</button>`}
+      <button type="button" class="ghost" data-act="skip">Skip</button>
+    </div></div>`;
+}
+
+async function loadConfirms() {
+  const { prompts } = await api("/api/prompts");
+  const box = $("#confirms");
+  const key = prompts.map((p) => p.id + (p.pending ? "p" : "")).join(",");
+  if (box.dataset.key === key) return; // unchanged: keep whatever is being typed
+  box.dataset.key = key;
+  box.innerHTML = prompts.map(confirmCard).join("");
+}
+
+async function answer(card, action, reason) {
+  const id = card.dataset.confirm;
+  try {
+    await api("/api/confirm", { id, action, reason });
+  } catch (err) { return toast("Error: " + err.message); }
+  delete $("#confirms").dataset.key;
+  await Promise.all([loadDiary(), loadConfirms()]);
+  flash(id);
+}
+
+$("#confirms").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]");
+  if (!b) return;
+  const card = b.closest("[data-confirm]");
+  if (b.dataset.act === "edit") {
+    const f = $("form", card);
+    f.hidden = false;
+    $("input", f).value = $("p", card)?.textContent || "";
+    return $("input", f).focus();
+  }
+  answer(card, b.dataset.act);
+});
+$("#confirms").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const card = e.target.closest("[data-confirm]");
+  const reason = $("input", card).value.trim();
+  if (!reason) return $("input", card).focus();
+  answer(card, "edit", reason);
+});
+
 // ask the log
 const ASK_EXAMPLES = ["Why did they change approach at step 4?", "Which expectations were contradicted?", "What dataset version was used?", "Why did they drop TF-IDF?"];
 $("#ask-examples").innerHTML = ASK_EXAMPLES.map((q) => `<button type="button">${esc(q)}</button>`).join("");
@@ -383,11 +528,26 @@ $("#ask-form").addEventListener("submit", (e) => {
   });
 });
 
-$("#reset-demo").addEventListener("click", async () => { await api("/api/reset", {}); $("#prompts").innerHTML = ""; await loadDiary(); toast("Demo session reloaded"); });
-$("#clear-diary").addEventListener("click", async () => {
-  if (!confirm("Remove all events and start an empty diary? (Export first if you want to keep them.)")) return;
-  await api("/api/clear", {}); $("#prompts").innerHTML = ""; await loadDiary();
+$("#reset-demo").addEventListener("click", async () => {
+  await api("/api/reset", {}); $("#prompts").innerHTML = ""; delete $("#confirms").dataset.key;
+  await Promise.all([loadDiary(), loadConfirms(), refreshCapture()]); toast("Demo session reloaded");
 });
+$("#clear-diary").addEventListener("click", async () => {
+  if (!confirm("Remove all events and raw capture, and start an empty diary? (Export first if you want to keep them.)")) return;
+  const project = prompt("Project name for the new diary:", $("#project-name").textContent);
+  if (project === null) return; // cancelled: nothing removed
+  await api("/api/clear", { project }); $("#prompts").innerHTML = ""; delete $("#confirms").dataset.key;
+  await Promise.all([loadDiary(), loadConfirms(), refreshCapture()]);
+});
+
+async function refreshCapture() {
+  state.stitch = await api("/api/stitch").catch(() => null);
+  renderCaptureStatus();
+  if (view === "raw" && !$("#tab-diary").hidden) {
+    const n = await api("/api/raw").then((r) => r.raw.length).catch(() => state.rawCount);
+    if (n !== state.rawCount) renderRaw();
+  }
+}
 
 // global hotkey: Cmd/Ctrl+Shift+E -> drop a thought
 document.addEventListener("keydown", (e) => {
@@ -550,11 +710,19 @@ function renderClaims(r) {
 (async function boot() {
   $("#curl-snippet").textContent =
     `curl -s ${location.origin}/api/events \\\n  -H 'content-type: application/json' \\\n  -d '{"type":"run","source":"agent",\n       "title":"train v2","result":"AUROC 0.83"}'`;
-  await Promise.all([loadStatus(), loadDiary()]);
+  await Promise.all([loadStatus(), loadDiary(), loadConfirms().catch(() => {}), refreshCapture()]);
   const tab = location.hash.slice(1);
   if (["question", "diary", "claims"].includes(tab)) showTab(tab);
-  setInterval(async () => { // pick up events logged by external tools
+  setInterval(async () => { // pick up events from capture hooks, the stitcher and other tools
     const snap = await api("/api/events").catch(() => null);
-    if (snap && snap.events.length !== state.events.length) { state.events = snap.events; renderTimeline(); }
+    const sig = snap && JSON.stringify(snap.events);
+    if (snap && sig !== state.sig) {
+      state.events = snap.events; state.sig = sig;
+      const open = $$(".ev.open").map((el) => el.dataset.id); // keep expanded cards expanded
+      renderTimeline();
+      open.forEach((id) => $("#ev-" + id)?.classList.add("open"));
+    }
+    loadConfirms().catch(() => {});
+    refreshCapture();
   }, 4000);
 })();

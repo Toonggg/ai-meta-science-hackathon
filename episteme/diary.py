@@ -18,13 +18,30 @@ OPS = {">=": lambda a, b: a >= b, "≥": lambda a, b: a >= b, "<=": lambda a, b:
 EXPECT = re.compile(r"(?P<metric>[A-Za-z][\w@\-]*)\s*(?P<op>>=|<=|≥|≤|>|<|=)\s*(?P<val>-?\d*\.?\d+)")
 
 
+EXPECT_CUE = re.compile(r"\b(expect\w*|target|aim(ing)? for|hypothes\w+|predict\w*|goal|hope|should (reach|get|"
+                        r"be|beat|exceed|hit)|at least|success means)\b", re.I)
+
+
+def extract_expectation(text):
+    """The expectation stated in free text (e.g. a captured instruction), or None.
+    Only a comparison after a cue word counts, and never a plain "=": "lr=0.001" or
+    "significant at p<0.05" in a sentence without a cue are settings, not expectations."""
+    for cue in EXPECT_CUE.finditer(text or ""):
+        window = text[cue.end():cue.end() + 80]
+        for m in EXPECT.finditer(window):
+            if m.group("op") != "=":
+                return m.group(0)
+    return None
+
+
 def check_expectation(expectation, result):
     """Return (metric, op, expected, observed, holds) or None if not comparable."""
     m = EXPECT.search(expectation or "")
     if not m:
         return None
     metric = m.group("metric")
-    r = re.search(re.escape(metric) + r"\D{0,20}?(-?\d*\.\d+|-?\d+)", result or "", re.I)
+    # Whole-word match, so an expectation on "p" never reads the number after "spearman".
+    r = re.search(r"(?<![\w@\-])" + re.escape(metric) + r"(?![\w@\-])\D{0,20}?(-?\d*\.\d+|-?\d+)", result or "", re.I)
     if not r:
         return None
     expected, observed = float(m.group("val")), float(r.group(1))
@@ -85,6 +102,80 @@ def after_add(store, ev):
     return auto, prompts
 
 
+def who(e):
+    """Plain-language attribution of an event's statement, used by ask, exports and the UI.
+
+    actor human / agent / system and provenance stated / inferred, plus the
+    researcher's one-click answer to a confirmation prompt (design decision 3).
+    """
+    actor, prov, conf = e.get("actor"), e.get("provenance"), e.get("confirmation")
+    if conf == "edited":
+        return "stated by the researcher" + (" (rewritten from a proposal)" if e.get("proposed_reason") else "")
+    if actor == "human":
+        base = "stated by the researcher"
+    elif actor == "agent":
+        base = "stated by the AI agent"
+    elif actor == "system" or prov == "inferred":
+        base = "inferred by Episteme"
+    else:
+        base = "stated at the time" if prov == "stated" else "inferred afterwards"
+    if conf == "confirmed":
+        return base + ", confirmed by the researcher"
+    if conf == "skipped":
+        return base + ", not confirmed (researcher skipped)"
+    if e.get("pending"):
+        return base + ", not classified yet"
+    return base
+
+
+def needs_answer(e):
+    """Pivots the researcher should confirm, edit or skip."""
+    return e.get("type") == "pivot" and not e.get("confirmation") and \
+        bool(e.get("needs_confirmation") or e.get("pending"))
+
+
+def prompts(events):
+    out = []
+    for e in events:
+        if needs_answer(e):
+            out.append({"id": e["id"], "step": e.get("step"), "title": e["title"], "reason": e.get("detail", ""),
+                        "quote": e.get("quote", ""), "model_summary": e.get("model_summary", ""),
+                        "who": who(e), "pending": bool(e.get("pending")),
+                        # A pending pivot has no checked reason yet, so there is nothing to confirm.
+                        "actions": ["edit", "skip"] if e.get("pending") else ["confirm", "edit", "skip"]})
+    return out
+
+
+def confirm(store, event_id, action, reason=""):
+    """The researcher's one-click answer: confirm keeps the agent's reason and records approval,
+    edit replaces it with the researcher's own words, skip records that nobody confirmed it."""
+    ev = next((e for e in store.events() if e["id"] == event_id), None)
+    if ev is None:
+        raise KeyError(event_id)
+    if ev.get("type") != "pivot":
+        raise ValueError("only pivots can be confirmed")
+    from store import now_iso
+    stamp = {"confirmed_by": "human", "confirmed_at": now_iso(), "needs_confirmation": False}
+    if action == "confirm":
+        if ev.get("pending"):
+            raise ValueError("this pivot has no checked reason yet; edit or skip it")
+        return store.update(event_id, dict(stamp, confirmation="confirmed"))
+    if action == "edit":
+        reason = (reason or "").strip()
+        if not reason:
+            raise ValueError("an edited reason cannot be empty")
+        fields = dict(stamp, confirmation="edited", detail=reason, actor="human", provenance="stated")
+        if ev.get("detail") and not ev.get("pending"):  # a pending pivot's detail is only the rules' placeholder
+            fields["proposed_reason"] = ev["detail"]  # keep what was proposed, for the audit trail
+        if ev.get("title", "").startswith("Possible change of approach"):
+            fields["title"] = ev["title"].replace("Possible change of approach", "Change of approach", 1)
+        return store.update(event_id, fields, remove=("pending", "quote"))
+    if action == "skip":
+        return store.update(event_id, {"confirmation": "skipped", "needs_confirmation": False,
+                                       "skipped_at": now_iso()})
+    raise ValueError("action must be confirm, edit or skip")
+
+
 def record_pivot(store, plan_id, links, reason, skipped):
     events = store.events()
     plan = next((e for e in events if e["id"] == plan_id), None)
@@ -129,8 +220,9 @@ def cite(e):
 def explain_pivot(pv, events):
     by_id = {e["id"]: e for e in events}
     lines = ["**Step %d (%s) is a pivot: %s.**" % (pv["step"], pv["id"], pv["title"])]
-    tag = "stated by the researcher at the time" if pv.get("provenance") == "stated" else \
-        "**inferred**, not stated by the researcher. Treat it with caution"
+    tag = who(pv)
+    if pv.get("provenance") == "inferred" and pv.get("confirmation") != "edited":
+        tag = "**%s**: nobody stated it at the time. Treat it with caution" % tag
     lines.append("Reason (%s) %s: %s" % (tag, cite(pv), pv.get("detail", "(none recorded)")))
     trig = [by_id[i] for i in pv.get("links", []) if i in by_id]
     if trig:
@@ -198,14 +290,15 @@ def ask_heuristic(question, events):
 ASK_SYSTEM = """You answer a reviewer's questions about a research project using ONLY the provenance log provided.
 Rules:
 - Cite every factual statement with the event id in square brackets, e.g. [E4]. Refer to steps by number when useful.
-- Each event has provenance "stated" (recorded by the researcher at the time) or "inferred" (reconstructed). Say which kind your answer rests on; flag inferred rationale as less reliable.
+- Each event has a "who" field saying who stated it: the researcher, the AI agent (possibly confirmed by the researcher), or inferred by Episteme. Say whose statement your answer rests on. Keep the researcher's decisions apart from the agent's proposals, and flag inferred rationale as less reliable.
 - If the log does not contain the answer, say so plainly. Do not speculate beyond the log.
 - Be concise: a short paragraph or a few bullets, in Markdown."""
 
 
 def ask(question, events, use_ai):
     if use_ai and llm.available():
-        compact = [{k: v for k, v in e.items() if k != "code"} for e in events]
+        drop = ("code", "raw_ids", "classified_by", "needs_confirmation", "confirmed_at", "skipped_at", "episode_id")
+        compact = [dict({k: v for k, v in e.items() if k not in drop}, who=who(e)) for e in events]
         try:
             return {"mode": "ai", "answer": llm.text(ASK_SYSTEM, "LOG:\n%s\n\nQUESTION: %s" % (
                 json.dumps(compact, indent=1, ensure_ascii=False), question))}
