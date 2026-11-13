@@ -93,7 +93,7 @@ def who(e):
     """
     actor, prov, conf = e.get("actor"), e.get("provenance"), e.get("confirmation")
     if conf == "edited":
-        return "stated by the researcher (rewritten from a proposal)"
+        return "stated by the researcher" + (" (rewritten from a proposal)" if e.get("proposed_reason") else "")
     if actor == "human":
         base = "stated by the researcher"
     elif actor == "agent":
@@ -147,7 +147,7 @@ def confirm(store, event_id, action, reason=""):
         if not reason:
             raise ValueError("an edited reason cannot be empty")
         fields = dict(stamp, confirmation="edited", detail=reason, actor="human", provenance="stated")
-        if ev.get("detail"):
+        if ev.get("detail") and not ev.get("pending"):  # a pending pivot's detail is only the rules' placeholder
             fields["proposed_reason"] = ev["detail"]  # keep what was proposed, for the audit trail
         if ev.get("title", "").startswith("Possible change of approach"):
             fields["title"] = ev["title"].replace("Possible change of approach", "Change of approach", 1)

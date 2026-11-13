@@ -65,6 +65,10 @@ code { font-size: 12px; }
 .prompt.info { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
 .prompt h4 { margin: 0 0 4px; }
 .prompt .row { margin: 8px 0 0; }
+.prompt p { margin: 6px 0; }
+.prompt .btns { margin: 8px 0 0; }
+.prompt form[hidden] { display: none; }
+.quote { font-style: italic; border-left: 2px solid var(--line); padding-left: 8px; color: var(--ink); }
 
 /* timeline */
 #timeline { list-style: none; padding: 0; margin: 16px 0 0; position: relative; }
@@ -89,6 +93,11 @@ code { font-size: 12px; }
         color: var(--c, var(--note)); background: color-mix(in srgb, var(--c, var(--note)) 18%, var(--panel)); }
 .prov { font-size: 11px; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); }
 .prov.inferred { border-style: dashed; color: var(--warn); border-color: var(--warn); }
+.prov.pending { border-style: dashed; color: var(--muted); }
+.tl-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+.tl-head .dlg-tabs { margin: 0; }
+#raw-view .card { margin-top: 12px; }
+#raw-view .card h3 { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .ref { display: inline-block; font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 18%, var(--panel));
        color: var(--accent); cursor: pointer; border: none; font-family: ui-monospace, monospace; }
 .t-plan { --c: var(--plan); } .t-run { --c: var(--run); } .t-surprise { --c: var(--surprise); } .t-pivot { --c: var(--pivot); }

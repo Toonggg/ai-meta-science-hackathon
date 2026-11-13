@@ -82,7 +82,10 @@ class Handler(BaseHTTPRequestHandler):
             job = pipeline.get(p.rsplit("/", 1)[-1])
             return self.send(200, job) if job else self.send(404, {"error": "unknown job"})
         if p == "/api/events":
-            return self.send(200, STORE.snapshot())
+            snap = STORE.snapshot()
+            for e in snap["events"]:
+                e["who"] = diary.who(e)  # display only, never stored
+            return self.send(200, snap)
         if p == "/api/raw":  # ?ids=R1,R2  or  ?since=R10  or everything
             q = parse_qs(u.query)
             if q.get("ids"):

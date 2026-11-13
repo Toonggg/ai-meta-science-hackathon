@@ -80,6 +80,7 @@ class ConfirmTest(unittest.TestCase):
             diary.confirm(self.store, pid, "confirm")
         ev = diary.confirm(self.store, pid, "edit", "Suspected leakage.")
         self.assertNotIn("pending", ev)
+        self.assertNotIn("proposed_reason", ev)  # the rules' placeholder is not a proposal
         self.assertTrue(ev["title"].startswith("Change of approach"))
 
     def test_model_never_overwrites_human_edit(self):
