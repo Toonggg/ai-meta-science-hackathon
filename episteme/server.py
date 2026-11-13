@@ -96,6 +96,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {"episodes": episodes.segment(RAW.all())})
         if p == "/api/stitch":
             return self.send(200, STITCHER.status())
+        if p == "/api/prompts":  # pivots waiting for the researcher's confirm / edit / skip
+            return self.send(200, {"prompts": diary.prompts(STORE.snapshot()["events"])})
         if p == "/api/demo-paper":
             return self.send(200, {"text": DEMO_PAPER})
         if p == "/api/export":
@@ -137,6 +139,14 @@ class Handler(BaseHTTPRequestHandler):
                 if STITCHER:
                     STITCHER.poke()
                 return self.send(200, {"raw": [e["rid"] for e in saved]})
+            if p == "/api/confirm":  # {"id": "E8", "action": "confirm" | "edit" | "skip", "reason": "..."}
+                try:
+                    ev = diary.confirm(STORE, b["id"], b.get("action", ""), b.get("reason", ""))
+                except ValueError as e:
+                    return self.send(400, {"error": str(e)})
+                if STITCHER:
+                    STITCHER.human_handled(ev)
+                return self.send(200, {"event": ev})
             if p == "/api/pivot":
                 ev = diary.record_pivot(STORE, b["plan_id"], b.get("links", []), b.get("reason", ""), bool(b.get("skipped")))
                 return self.send(200, {"event": ev})

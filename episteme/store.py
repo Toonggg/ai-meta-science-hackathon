@@ -125,6 +125,8 @@ class Diary:
 
     def reset_demo(self):
         events = demo_events()
+        for e in events:  # the demo was logged by hand: everything is the researcher's except Episteme's own flags
+            e.setdefault("actor", "system" if e.get("source") == "episteme" else "human")
         with self.lock:
             data = self._read()
             data["project"] = "Readmission prediction from clinical notes"

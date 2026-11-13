@@ -148,6 +148,15 @@ class Stitcher:
             except Exception as e:  # never let the thread die
                 self.last_error = "stitcher: %r" % e
 
+    def human_handled(self, event):
+        """The researcher answered a pivot's prompt: never let a later model pass overwrite it."""
+        with self.lock:
+            st = self.state["episodes"].get(event.get("episode_id") or "")
+            if st and st.get("pivot") == event["id"]:
+                st["status"] = "done"
+                st["human"] = event.get("confirmation")
+                self._save()
+
     def _ai_ready(self, ignore_retry=False):
         return self.use_ai and llm.available() and (ignore_retry or time.time() >= self.retry_at)
 
@@ -311,6 +320,11 @@ class Stitcher:
             return
         self.last_error = ""
         classified_by = {"model": llm.model_name(model), "at": now_iso()}
+        if st.get("pivot"):
+            current = next((e for e in self.store.events() if e["id"] == st["pivot"]), None)
+            if current is None or current.get("confirmation"):
+                st["status"] = "done"  # the researcher answered (or deleted it) while the model was working
+                return
 
         human_src = [x["text"] for x in ep["instructions"]]
         agent_src = [a["text"] for a in ep["agent_text"]] + ([a["text"] for a in prev["agent_text"]] if prev else [])
