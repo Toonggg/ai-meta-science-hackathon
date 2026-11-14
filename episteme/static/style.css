@@ -1,4 +1,17 @@
-:root { --radius: 10px; }  /* colours live in themes.css (generated, contrast-checked) */
+:root {
+  --radius: 10px;
+  /* Selection box chevron spacing variables (enforces breathing room between arrow and border) */
+  --select-arrow-gap: 12px;        /* Distance from right border for standard selection boxes */
+  --select-arrow-gap-pill: 16px;   /* Extra inset for rounded/pill selection boxes to clear corner radius */
+  --select-arrow-width: 10px;
+  --select-arrow-height: 6px;
+  --select-arrow-padding-inline-end: calc(var(--select-arrow-gap) + var(--select-arrow-width) + 8px);
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='none' stroke='%23a9b1d6' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='m1 1 4 4 4-4'/%3E%3C/svg%3E");
+}  /* colours live in themes.css (generated, contrast-checked) */
+
+:root[data-theme="catppuccin-latte"] {
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='none' stroke='%235a5c6e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='m1 1 4 4 4-4'/%3E%3C/svg%3E");
+}
 a { color: var(--link); }
 a:visited { color: var(--link); }
 * { box-sizing: border-box; }
@@ -35,8 +48,24 @@ main { max-width: 1280px; margin: 0 auto; padding: 24px; }
 .small { font-size: 12px; }
 .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .row > input, .row > textarea { flex: 1; }
-input, textarea, select { font: inherit; color: var(--ink); background: var(--input); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+input, textarea { font: inherit; color: var(--ink); background: var(--input); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 textarea { width: 100%; resize: vertical; }
+select {
+  font: inherit;
+  color: var(--ink);
+  background-color: var(--input);
+  background-image: var(--select-arrow);
+  background-repeat: no-repeat;
+  background-position: right var(--select-arrow-gap) center;
+  background-size: var(--select-arrow-width) var(--select-arrow-height);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px var(--select-arrow-padding-inline-end) 8px 10px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+}
 input:focus, textarea:focus, select:focus { outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); border-color: var(--accent); }
 button, .btn { font: inherit; border-radius: 8px; padding: 8px 14px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; text-decoration: none; display: inline-block; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
@@ -223,5 +252,27 @@ table.st tr.off td { color: var(--muted); }
 .badge.warn::before { color: var(--warn); } .badge.bad::before { color: var(--bad); }
 .stxt.up { color: var(--ok); } .stxt.down, .stxt.error { color: var(--warn); } .stxt.unknown, .stxt.off, .stxt.needs_key { color: var(--muted); }
 
-/* theme picker */
-.theme-pick { font-size: 12px; padding: 4px 8px; max-width: 150px; border-radius: 999px; background: var(--input); color: var(--ink); border: 1px solid var(--line); }
+/* theme picker & pill-shaped selection boxes */
+.theme-pick, .pill-select {
+  font-size: 12px;
+  padding: 5px calc(var(--select-arrow-gap-pill) + var(--select-arrow-width) + 8px) 5px 12px;
+  max-width: 165px;
+  border-radius: 999px;
+  background-position: right var(--select-arrow-gap-pill) center;
+}
+
+/* Modern customizable select (appearance: base-select) progressive enhancement */
+@supports (appearance: base-select) {
+  select, select::picker(select) {
+    appearance: base-select;
+  }
+  select {
+    background-image: none;
+  }
+  select::picker-icon {
+    margin-inline-end: var(--select-arrow-gap);
+  }
+  .theme-pick::picker-icon, .pill-select::picker-icon {
+    margin-inline-end: var(--select-arrow-gap-pill);
+  }
+}

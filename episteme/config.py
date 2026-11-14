@@ -12,9 +12,29 @@ _lock = threading.Lock()
 _path = None
 
 
+def _load_dotenv(env_path):
+    if not os.path.isfile(env_path):
+        return
+    try:
+        with open(env_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k = k.strip()
+                v = v.strip().strip("'\"")
+                if k and k not in os.environ:
+                    os.environ[k] = v
+    except OSError:
+        pass
+
+
 def init(state_dir):
     global _path
     _path = os.path.join(state_dir, "config.json")
+    root_env = os.path.join(os.path.dirname(state_dir), ".env")
+    _load_dotenv(root_env)
 
 
 def load():
