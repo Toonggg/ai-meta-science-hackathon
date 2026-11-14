@@ -20,10 +20,11 @@ async function api(path, body) {
 }
 const useAI = () => $("#use-ai").checked;
 
+let _toastTimer = null;
 function toast(msg) {
   const t = $("#toast");
   t.textContent = msg; t.hidden = false;
-  clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 3200);
+  clearTimeout(_toastTimer); _toastTimer = setTimeout(() => (t.hidden = true), 3200);
 }
 
 async function busy(btn, fn) {
@@ -49,7 +50,10 @@ function md(text) {
 }
 
 function modeNote(res) {
-  let s = `<div class="mode">${res.mode === "ai" ? "Answered by " + esc(state.status.ai.label) + " · " + esc(state.status.ai.model) : "Local rules (no model call)"}</div>`;
+  const aiLabel = state.status?.ai?.label || "AI";
+  const aiModel = state.status?.ai?.model;
+  const modelStr = aiModel ? ` · ${aiModel}` : "";
+  let s = `<div class="mode">${res.mode === "ai" ? "Answered by " + esc(aiLabel) + esc(modelStr) : "Local rules (no model call)"}</div>`;
   if (res.ai_error) s += `<div class="warn-note">AI unavailable (${esc(res.ai_error)}). Showing heuristic result instead.</div>`;
   return s;
 }
@@ -111,10 +115,10 @@ function openSettings(pane) {
   $("#settings").showModal();
 }
 function showPane(name) {
-  $$(".dlg-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.pane === name));
+  $$("#settings .dlg-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.pane === name));
   $$("#settings .pane").forEach((p) => (p.hidden = p.dataset.pane !== name));
 }
-$$(".dlg-tabs button").forEach((b) => b.addEventListener("click", () => showPane(b.dataset.pane)));
+$$("#settings .dlg-tabs button").forEach((b) => b.addEventListener("click", () => showPane(b.dataset.pane)));
 $("#ai-badge").addEventListener("click", () => openSettings("model"));
 $("#src-badge").addEventListener("click", () => openStatus());
 
@@ -126,7 +130,13 @@ function fillProvider(initial) {
   $("#s-base").value = current ? ai.base_url : p.base_url;
   $("#s-key").value = "";
   $("#s-key").placeholder = current && ai.has_key ? "•••••• saved (leave blank to keep)" : p.env_key_found ? "found in environment" : p.needs_key ? "paste key" : "not needed";
-  $$('.pane[data-pane="model"] label').forEach((l) => (l.style.display = p.id === "none" && l.querySelector("input") ? "none" : ""));
+  $$('.pane[data-pane="model"] label').forEach((l) => {
+    if (p.id === "none" && l.querySelector("input")) {
+      l.style.display = "none";
+    } else {
+      l.style.removeProperty("display");
+    }
+  });
   const hints = {
     anthropic: "Claude via the Messages API. Key from console.anthropic.com, or set ANTHROPIC_API_KEY before ./run.",
     openai: "OpenAI, or any OpenAI-compatible server: LM Studio (http://localhost:1234/v1), llama.cpp, vLLM, OpenRouter. Local servers need no key.",
@@ -255,15 +265,24 @@ $("#st-check-all").addEventListener("click", async (e) => {
   const b = e.currentTarget; b.disabled = true; b.innerHTML = '<span class="spinner"></span>Checking…';
   state.status.search.sources.forEach((s) => { if (s.enabled && !s.probe_costs_credit) stChecking.add(s.id); });
   renderStatus(state.status.search);
-  try { state.status.search = await api("/api/sources/check", {}); }
-  finally { stChecking.clear(); b.disabled = false; b.textContent = "Check all now"; renderStatus(state.status.search); loadStatus(); }
+  try {
+    state.status.search = await api("/api/sources/check", {});
+  } catch (err) {
+    toast("Check all failed: " + err.message);
+  } finally {
+    stChecking.clear();
+    b.disabled = false;
+    b.textContent = "Check all now";
+    renderStatus(state.status.search);
+    loadStatus();
+  }
 });
 
 // ---------------------------------------------------------------- diary
 async function loadDiary() {
   const snap = await api("/api/events");
   state.events = snap.events;
-  state.sig = JSON.stringify(snap.events);
+  state.sig = snap.events.map((e) => `${e.id}:${e.ts}:${e.step}:${e.status || ""}:${e.confirmation || ""}:${e.title}`).join("|");
   $("#project-name").textContent = snap.project || "Research diary";
   renderTimeline();
 }
@@ -293,8 +312,18 @@ function evCard(e) {
   if (e.status) fields.push(["Status", `<span class="${e.status === "failed" ? "status-failed" : ""}">${esc(e.status)}</span>`]);
   if (e.params) fields.push(["Parameters", esc(Object.entries(e.params).map(([k, v]) => `${k}=${v}`).join(", "))]);
   if (e.data) fields.push(["Data", esc(`${e.data.name} v${e.data.version} (${e.data.hash})`)]);
-  if (e.links?.length) fields.push(["Linked to", e.links.map((l) => `<button class="ref" data-ref="${esc(l)}">${esc(l)}</button>`).join(" ")]);
-  if (e.raw_ids?.length) fields.push(["Raw evidence", `<button class="ref" data-raw="${esc(e.raw_ids.join(","))}" title="Show what the capture hooks recorded">${esc(e.raw_ids.join(" "))}</button>`]);
+  if (e.links?.length) {
+    const validLinks = e.links.filter((l) => /^[ER]\d+$/i.test(l));
+    if (validLinks.length) {
+      fields.push(["Linked to", validLinks.map((l) => `<button class="ref" data-ref="${esc(l)}">${esc(l)}</button>`).join(" ")]);
+    }
+  }
+  if (e.raw_ids?.length) {
+    const validRawIds = e.raw_ids.filter((id) => /^[ER]\d+$/i.test(id));
+    if (validRawIds.length) {
+      fields.push(["Raw evidence", `<button class="ref" data-raw="${esc(validRawIds.join(","))}" title="Show what the capture hooks recorded">${esc(validRawIds.join(" "))}</button>`]);
+    }
+  }
   const time = new Date(e.ts);
   const when = isNaN(time) ? e.ts : time.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   const id = esc(e.id);
@@ -386,44 +415,67 @@ document.addEventListener("click", async (e) => {
     const body = rawBtn.closest(".body");
     const shown = $(".raw-out", body);
     if (shown) return shown.remove();
-    const { raw } = await api("/api/raw?ids=" + encodeURIComponent(rawBtn.dataset.raw));
+    const ids = (rawBtn.dataset.raw || "").split(",").filter((id) => /^[ER]\d+$/i.test(id));
+    if (!ids.length) return;
+    const { raw } = await api("/api/raw?ids=" + encodeURIComponent(ids.join(",")));
     body.insertAdjacentHTML("beforeend", `<pre class="raw-out">${esc(raw.map(rawLine).join("\n") || "Not in the raw log (it may have been cleared).")}</pre>`);
     return;
   }
   const ref = e.target.closest(".ref");
-  if (ref) { e.stopPropagation(); return flash(ref.dataset.ref); }
-  const del = e.target.closest("[data-del]");
-  if (del) {
+  if (ref && ref.dataset.ref) {
     e.stopPropagation();
-    if (!confirm("Delete " + del.dataset.del + " from the diary?")) return;
-    await api("/api/delete", { id: del.dataset.del });
+    const safeRef = ref.dataset.ref.trim();
+    if (/^E\d+$/i.test(safeRef)) return flash(safeRef);
+    return;
+  }
+  const del = e.target.closest("[data-del]");
+  if (del && del.dataset.del) {
+    e.stopPropagation();
+    const delId = del.dataset.del.trim();
+    if (!/^E\d+$/i.test(delId)) return;
+    if (!confirm("Delete " + delId + " from the diary?")) return;
+    await api("/api/delete", { id: delId });
     return loadDiary();
   }
   const card = e.target.closest(".ev .card");
-  if (card && !e.target.closest("pre, dd")) card.parentElement.classList.toggle("open");
+  if (card && !e.target.closest("pre, dd, a, button, input, textarea, select, label")) card.parentElement.classList.toggle("open");
 });
 
 // add form
 const form = $("#add-form");
-const syncType = () => { form.dataset.type = $("#add-type").value; };
-$("#add-type").addEventListener("change", () => { syncType(); form.classList.add("expanded"); });
-$("#add-title").addEventListener("focus", () => form.classList.add("expanded"));
-syncType();
-form.addEventListener("submit", async (e) => {
+const syncType = () => { if (form && $("#add-type")) form.dataset.type = $("#add-type").value; };
+if (form) {
+  $("#add-type")?.addEventListener("change", () => { syncType(); form.classList.add("expanded"); });
+  $("#add-title")?.addEventListener("focus", () => form.classList.add("expanded"));
+  syncType();
+}
+let addSubmitting = false;
+form?.addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (addSubmitting) return;
   const type = $("#add-type").value;
   const title = $("#add-title").value.trim();
   if (!title) return $("#add-title").focus();
-  const ev = { type, title, detail: $("#add-detail").value.trim(), source: "manual" };
-  if (type === "plan") ev.expectation = $("#add-expect").value.trim();
-  if (type === "run") { ev.result = $("#add-result").value.trim(); ev.status = $("#add-status").value; }
-  const res = await api("/api/events", ev);
-  ["#add-title", "#add-detail", "#add-expect", "#add-result"].forEach((s) => ($(s).value = ""));
-  form.classList.remove("expanded");
-  await loadDiary();
-  res.auto.forEach((a) => flash(a.id));
-  showPrompts(res.prompts);
-  if (!res.auto.length && !res.prompts.some((p) => p.kind === "pivot_why")) flash(res.event.id);
+  const submitBtn = $("button[type=submit]", form);
+  addSubmitting = true;
+  if (submitBtn) submitBtn.disabled = true;
+  try {
+    const ev = { type, title, detail: $("#add-detail").value.trim(), source: "manual" };
+    if (type === "plan") ev.expectation = $("#add-expect").value.trim();
+    if (type === "run") { ev.result = $("#add-result").value.trim(); ev.status = $("#add-status").value; }
+    const res = await api("/api/events", ev);
+    ["#add-title", "#add-detail", "#add-expect", "#add-result"].forEach((s) => ($(s).value = ""));
+    form.classList.remove("expanded");
+    await loadDiary();
+    res.auto.forEach((a) => flash(a.id));
+    showPrompts(res.prompts);
+    if (!res.auto.length && !res.prompts.some((p) => p.kind === "pivot_why")) flash(res.event.id);
+  } catch (err) {
+    toast("Error: " + err.message);
+  } finally {
+    addSubmitting = false;
+    if (submitBtn) submitBtn.disabled = false;
+  }
 });
 
 function showPrompts(prompts) {
@@ -433,8 +485,18 @@ function showPrompts(prompts) {
     const el = document.createElement("div");
     el.className = "card prompt" + (p.kind === "info" ? " info" : "");
     if (p.kind === "info") {
-      el.innerHTML = `<div>${md(p.message)}</div>`;
-      setTimeout(() => el.remove(), 7000);
+      el.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+        <div>${md(p.message)}</div>
+        <button type="button" class="del" style="opacity:0.6; cursor:pointer;" title="Dismiss">×</button>
+      </div>`;
+      const delBtn = $(".del", el);
+      let timer = setTimeout(() => el.remove(), 7000);
+      el.addEventListener("mouseenter", () => clearTimeout(timer));
+      el.addEventListener("mouseleave", () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => el.remove(), 4000);
+      });
+      if (delBtn) delBtn.addEventListener("click", () => { clearTimeout(timer); el.remove(); });
     } else {
       el.innerHTML = `<h4>Why the change of direction?</h4><div>${md(p.message)}</div>
         <form class="row"><input placeholder="e.g. the OOM showed we can't fit trigram features in memory" autocomplete="off">
@@ -480,8 +542,25 @@ async function loadConfirms() {
   const box = $("#confirms");
   const key = prompts.map((p) => p.id + (p.pending ? "p" : "")).join(",");
   if (box.dataset.key === key) return; // unchanged: keep whatever is being typed
+  const typedValues = {};
+  $$("[data-confirm]", box).forEach((card) => {
+    const id = card.dataset.confirm;
+    const inp = $("input", card);
+    if (inp && inp.value) typedValues[id] = inp.value;
+  });
   box.dataset.key = key;
   box.innerHTML = prompts.map(confirmCard).join("");
+  $$("[data-confirm]", box).forEach((card) => {
+    const id = card.dataset.confirm;
+    if (typedValues[id]) {
+      const inp = $("input", card);
+      const f = $("form", card);
+      if (inp) {
+        inp.value = typedValues[id];
+        if (f) f.hidden = false;
+      }
+    }
+  });
 }
 
 async function answer(card, action, reason) {
@@ -565,7 +644,12 @@ const Q_EXAMPLES = [
 ];
 $("#q-examples").innerHTML = Q_EXAMPLES.map((q) => `<button type="button">${esc(q)}</button>`).join("");
 $$("#q-examples button").forEach((b) => b.addEventListener("click", () => { $("#q-input").value = b.textContent; $("#q-run").click(); }));
-$("#q-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#q-run").click(); } });
+$("#q-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    $("#q-run").click();
+  }
+});
 
 // [P3] [D1] [W2] -> clickable chips that jump to the item in the results; [E4] -> diary
 function rich(text) {
@@ -590,6 +674,7 @@ $("#q-run").addEventListener("click", async () => {
   const q = $("#q-input").value.trim();
   if (!q) return $("#q-input").focus();
   clearTimeout(qPoll);
+  qPoll = null;
   const btn = $("#q-run");
   btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>Running…`;
   try {
@@ -597,11 +682,23 @@ $("#q-run").addEventListener("click", async () => {
     const tick = async () => {
       const j = await api("/api/jobs/" + job);
       renderJob(q, j);
-      if (j.status === "done") { btn.disabled = false; btn.textContent = "Stress-test"; }
-      else qPoll = setTimeout(tick, 600);
+      if (j.status === "done") {
+        btn.disabled = false;
+        btn.textContent = "Stress-test";
+        clearTimeout(qPoll);
+        qPoll = null;
+      } else {
+        qPoll = setTimeout(tick, 600);
+      }
     };
     await tick();
-  } catch (e) { toast("Error: " + e.message); btn.disabled = false; btn.textContent = "Stress-test"; }
+  } catch (e) {
+    toast("Error: " + e.message);
+    btn.disabled = false;
+    btn.textContent = "Stress-test";
+    clearTimeout(qPoll);
+    qPoll = null;
+  }
 });
 
 const ICON = { pending: "○", running: '<span class="spinner"></span>', done: "✓", skipped: "–", failed: "!" };
@@ -665,7 +762,9 @@ function renderJob(q, j) {
         ${j.web.length ? `<h3 style="margin-top:14px">Web (${j.web.length})</h3><ul class="plain papers">${j.web.map(paperItem).join("")}</ul>` : ""}</div>
     </div>`;
   }
-  html += `<div class="mode">${r.mode === "ai" ? "Final critique written by " + esc(state.status.ai.label) + " · " + esc(state.status.ai.model) + (j.papers.length ? `, grounded in ${j.papers.length} retrieved papers` : ", not grounded in search results") : "Rules" + (j.papers.length ? " + literature search" : "") + " (no model call)"}</div>`;
+  const aiLabel = state.status?.ai?.label || "AI";
+  const aiModel = state.status?.ai?.model ? " · " + state.status.ai.model : "";
+  html += `<div class="mode">${r.mode === "ai" ? "Final critique written by " + esc(aiLabel) + esc(aiModel) + (j.papers.length ? `, grounded in ${j.papers.length} retrieved papers` : ", not grounded in search results") : "Rules" + (j.papers.length ? " + literature search" : "") + " (no model call)"}</div>`;
   $("#q-out").innerHTML = html;
   $$("[data-rq]", $("#q-out")).forEach((b) => b.addEventListener("click", async () => {
     const cites = (j.papers.filter((p) => p.kind === "systematic_review").slice(0, 3)).map((p) => `${p.title} (${p.url})`).join("; ");
@@ -682,6 +781,7 @@ $("#c-demo").addEventListener("click", async () => { $("#c-input").value = (awai
 $("#c-run").addEventListener("click", () => {
   const text = $("#c-input").value.trim();
   if (!text) return toast("Paste some paper text, or load the demo paper");
+  $("#c-out").innerHTML = `<div class="empty"><span class="spinner"></span>Analysing claims and cross-referencing with diary...</div>`;
   busy($("#c-run"), async () => renderClaims(await api("/api/claims", { text, use_ai: useAI() })));
 });
 
@@ -710,17 +810,24 @@ function renderClaims(r) {
 (async function boot() {
   $("#curl-snippet").textContent =
     `curl -s ${location.origin}/api/events \\\n  -H 'content-type: application/json' \\\n  -d '{"type":"run","source":"agent",\n       "title":"train v2","result":"AUROC 0.83"}'`;
-  await Promise.all([loadStatus(), loadDiary(), loadConfirms().catch(() => {}), refreshCapture()]);
+  await loadStatus();
+  await loadDiary();
+  await Promise.all([loadConfirms().catch(() => {}), refreshCapture().catch(() => {})]);
   const tab = location.hash.slice(1);
   if (["question", "diary", "claims"].includes(tab)) showTab(tab);
   setInterval(async () => { // pick up events from capture hooks, the stitcher and other tools
     const snap = await api("/api/events").catch(() => null);
-    const sig = snap && JSON.stringify(snap.events);
-    if (snap && sig !== state.sig) {
-      state.events = snap.events; state.sig = sig;
-      const open = $$(".ev.open").map((el) => el.dataset.id); // keep expanded cards expanded
-      renderTimeline();
-      open.forEach((id) => $("#ev-" + id)?.classList.add("open"));
+    if (snap && snap.events) {
+      const sig = snap.events.map((e) => `${e.id}:${e.ts}:${e.step}:${e.status || ""}:${e.confirmation || ""}:${e.title}`).join("|");
+      if (sig !== state.sig) {
+        state.events = snap.events;
+        state.sig = sig;
+        const open = $$(".ev.open").map((el) => el.dataset.id); // keep expanded cards expanded
+        const scrollY = window.scrollY;
+        renderTimeline();
+        open.forEach((id) => $("#ev-" + id)?.classList.add("open"));
+        window.scrollTo(window.scrollX, scrollY);
+      }
     }
     loadConfirms().catch(() => {});
     refreshCapture();

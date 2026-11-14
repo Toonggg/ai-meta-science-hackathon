@@ -179,7 +179,7 @@ table.claims tr:last-child td { border-bottom: none; }
 .cert-strong { font-weight: 700; } .cert-hedged { color: var(--muted); font-style: italic; }
 .section-lbl { font-size: 11px; color: var(--muted); display: block; }
 
-dialog { border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; width: min(520px, 92vw); background: var(--panel); color: var(--ink); }
+dialog { border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; width: min(640px, 94vw); background: var(--panel); color: var(--ink); }
 dialog::backdrop { background: var(--backdrop); }
 dialog label { display: grid; gap: 4px; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
 dialog h3 { margin-top: 0; }
@@ -227,7 +227,6 @@ dialog h3 { margin-top: 0; }
 .dlg-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
 .dlg-tabs button { border-radius: 999px; padding: 4px 12px; font-size: 13px; }
 .dlg-tabs button.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-dialog { width: min(640px, 94vw); }
 #src-list .grp { font-size: 11px; text-transform: uppercase; color: var(--muted); margin: 10px 0 4px; font-weight: 700; }
 #src-list .srow { display: grid; grid-template-columns: 18px 10px 1fr 170px; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
 #src-list .srow small { display: block; color: var(--muted); font-size: 11px; }
