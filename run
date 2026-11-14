@@ -15,6 +15,14 @@ LOG="$STATE/server.log"
 PORT=8765
 OPEN=1
 
+# Auto-load .env if present (gitignored, for API keys like Berget AI)
+if [ -f "$ROOT/.env" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  . "$ROOT/.env"
+  set +a
+fi
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --offline) export EPISTEME_OFFLINE=1 ;;
