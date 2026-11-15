@@ -92,6 +92,10 @@ async function loadStatus() {
   $("#tier-src").textContent = src.available ? `${src.up}/${src.enabled} online · status` : "all off · configure";
   $("#use-search").disabled = !src.available;
   $("#use-search").checked = src.available && localStorage.getItem("useSearch") !== "0";
+  // One header pill summarises both capabilities; the details live in the menu it opens.
+  const sum = $("#hdr-sum");
+  sum.textContent = [ai.available ? ai.model : "No model", src.available ? `${src.up}/${src.enabled} sources` : "no search"].join(" · ");
+  sum.classList.toggle("on", ai.available || src.up > 0);
   syncTiers();
   if ($("#settings").open) renderSources();
 }
@@ -119,8 +123,11 @@ function showPane(name) {
   $$("#settings .pane").forEach((p) => (p.hidden = p.dataset.pane !== name));
 }
 $$("#settings .dlg-tabs button").forEach((b) => b.addEventListener("click", () => showPane(b.dataset.pane)));
-$("#ai-badge").addEventListener("click", () => openSettings("model"));
-$("#src-badge").addEventListener("click", () => openStatus());
+$("#ai-badge").addEventListener("click", () => { $("#hdr-menu").open = false; openSettings("model"); });
+$("#src-badge").addEventListener("click", () => { $("#hdr-menu").open = false; openStatus(); });
+document.addEventListener("click", (e) => { // close the header menu on any click outside it
+  if ($("#hdr-menu").open && !e.target.closest("#hdr-menu")) $("#hdr-menu").open = false;
+});
 
 function fillProvider(initial) {
   const ai = state.status.ai;
@@ -307,6 +314,7 @@ function evCard(e) {
   if (e.model_summary) fields.push(["Model's summary", esc(e.model_summary)]);
   if (e.proposed_reason) fields.push(["Proposed", esc(e.proposed_reason)]);
   if (e.who && e.actor) fields.push(["Stated by", esc(e.who)]);
+  fields.push(["Recorded via", esc(SOURCE_LABEL[e.source] || e.source)]);
   if (e.classified_by) fields.push(["Classified by", esc(`${e.classified_by.model} · ${e.classified_by.at}`)]);
   if (e.result) fields.push(["Result", esc(e.result)]);
   if (e.status) fields.push(["Status", `<span class="${e.status === "failed" ? "status-failed" : ""}">${esc(e.status)}</span>`]);
@@ -332,7 +340,7 @@ function evCard(e) {
     <div class="card">
       <div class="top"><span class="chip">${esc(TYPE_LABEL[e.type] || e.type)}</span><span class="title">${esc(e.title)}</span>
         <button class="del" title="Delete event" data-del="${id}">×</button></div>
-      <div class="meta"><span>${id}</span><span>${esc(when)}</span><span>via ${esc(SOURCE_LABEL[e.source] || e.source)}</span>
+      <div class="meta"><span class="eid">${id}</span><span>${esc(when)}</span>
         ${whoBadge(e)}
         ${e.result ? `<span>→ ${esc(e.result.length > 60 ? e.result.slice(0, 58) + "…" : e.result)}</span>` : ""}</div>
       <div class="body"><dl>${fields.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
@@ -347,6 +355,7 @@ try { view = localStorage.getItem("diary-view") || "all"; } catch (_) { /* stora
 
 function renderTimeline() {
   const tl = $("#timeline");
+  renderAskExamples();
   $$("#view-pick button").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
   tl.hidden = view === "raw";
   $("#raw-view").hidden = view !== "raw";
@@ -522,19 +531,21 @@ function confirmCard(p) {
   const step = esc(p.step), id = esc(p.id);
   const ask = p.pending ? `Why did the approach change at step ${step}?` : `Is this the reason for step ${step}?`;
   const body = p.pending
-    ? `<p class="muted small">Flagged by rules; no model has checked it yet. Write the reason in your words, or skip.</p>`
+    ? ""
     : `<p class="quote">“${esc(p.reason)}”</p>${p.model_summary ? `<p class="muted small">Model's summary: ${esc(p.model_summary)}</p>` : ""}`;
-  return `<div class="card prompt" data-confirm="${id}">
+  // Pending (rules only): one line of context and one input row with Save + Skip.
+  const skip = `<button type="button" class="ghost" data-act="skip">Skip</button>`;
+  return `<div class="card prompt${p.pending ? " compact" : ""}" data-confirm="${id}">
     <h4>${ask}</h4>
-    <div class="muted small"><button class="ref" data-ref="${id}">${id}</button> ${esc(p.title)} · ${esc(p.who)}</div>
+    <div class="muted small ctx" title="${esc(p.title)}"><button class="ref" data-ref="${id}">${id}</button> ${esc(p.title)}${p.pending ? " · flagged by rules" : " · " + esc(p.who)}</div>
     ${body}
     <form class="row"${p.pending ? "" : " hidden"}><input placeholder="The reason, in your words" autocomplete="off">
-      <button class="primary">Save reason</button></form>
-    <div class="btns">
+      <button class="primary">Save reason</button>${p.pending ? skip : ""}</form>
+    ${p.pending ? "" : `<div class="btns">
       ${p.actions.includes("confirm") ? `<button type="button" class="primary" data-act="confirm">✔ Confirm</button>` : ""}
-      ${p.pending ? "" : `<button type="button" class="ghost" data-act="edit">✎ Edit</button>`}
-      <button type="button" class="ghost" data-act="skip">Skip</button>
-    </div></div>`;
+      <button type="button" class="ghost" data-act="edit">✎ Edit</button>
+      ${skip}
+    </div>`}</div>`;
 }
 
 async function loadConfirms() {
@@ -594,9 +605,28 @@ $("#confirms").addEventListener("submit", (e) => {
 });
 
 // ask the log
-const ASK_EXAMPLES = ["Why did they change approach at step 4?", "Which expectations were contradicted?", "What dataset version was used?", "Why did they drop TF-IDF?"];
-$("#ask-examples").innerHTML = ASK_EXAMPLES.map((q) => `<button type="button">${esc(q)}</button>`).join("");
-$$("#ask-examples button").forEach((b) => b.addEventListener("click", () => { $("#ask-input").value = b.textContent; $("#ask-form").requestSubmit(); }));
+// Example questions come from the diary on screen, so they never point at a step that isn't there.
+function askExamples() {
+  const pivot = state.events.find((e) => e.type === "pivot");
+  const qs = [];
+  if (pivot) qs.push(`Why did they change approach at step ${pivot.step}?`);
+  if (state.events.some((e) => e.type === "surprise")) qs.push("Which expectations were contradicted?");
+  if (state.events.length) qs.push("What was tried and abandoned?");
+  return qs;
+}
+function renderAskExamples() {
+  const qs = askExamples();
+  const box = $("#ask-examples");
+  if (box.dataset.key === qs.join("|")) return;
+  box.dataset.key = qs.join("|");
+  box.innerHTML = qs.map((q) => `<button type="button">${esc(q)}</button>`).join("");
+  $("#ask-input").placeholder = qs[0] || "Ask about the diary";
+}
+$("#ask-examples").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  $("#ask-input").value = b.textContent; $("#ask-form").requestSubmit();
+});
 $("#ask-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const q = $("#ask-input").value.trim() || $("#ask-input").placeholder;
