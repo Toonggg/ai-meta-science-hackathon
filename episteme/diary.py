@@ -70,6 +70,7 @@ def after_add(store, ev):
                 metric, op, exp, obs, _ = chk
                 auto.append(store.add({
                     "type": "surprise", "source": "episteme", "provenance": "inferred",
+                    "ts": ev.get("ts"),  # dated by the run it judges, so replays keep the session's timeline
                     "title": "Expectation contradicted: expected %s %s %g, observed %g" % (metric, op, exp, obs),
                     "detail": "Auto-detected by the hypothesis ledger: the result of %s falls short of the expectation stated in %s."
                               % (ev["id"], plan["id"]),
