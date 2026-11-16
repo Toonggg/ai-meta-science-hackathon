@@ -289,8 +289,24 @@ $("#st-check-all").addEventListener("click", async (e) => {
 async function loadDiary(focusNew = false) {
   const snap = await api("/api/events");
   state.events = snap.events;
+  state.demo = snap.demo;
   state.sig = snap.events.map((e) => `${e.id}:${e.ts}:${e.step}:${e.status || ""}:${e.confirmation || ""}:${e.title}`).join("|");
   $("#project-name").textContent = snap.project || "Research diary";
+
+  // Remove the load alphafold demo button in the top header once already in a demo project
+  const isDemo = Boolean(snap.demo);
+  const quickDemoBtn = $("#quick-demo-btn");
+  if (quickDemoBtn) quickDemoBtn.hidden = isDemo;
+  const hdrReplayBtn = $("#hdr-replay-btn");
+  if (hdrReplayBtn) {
+    hdrReplayBtn.hidden = !isDemo;
+    hdrReplayBtn.textContent = snap.demo === "hospital-readmission" ? "▶ Replay Hospital Demo" : "▶ Replay AlphaFold Demo";
+  }
+  const tlReplayBtn = $("#tl-replay-btn");
+  if (tlReplayBtn) {
+    tlReplayBtn.textContent = snap.demo === "hospital-readmission" ? "▶ Replay Hospital Demo" : "▶ Replay Session";
+  }
+
   renderTimeline();
   if (focusNew) focusLatestStep();
 }
@@ -684,6 +700,25 @@ const START_SEEN = "episteme-start-seen";
 function startSeen() { try { return sessionStorage.getItem(START_SEEN) === TOKEN; } catch { return false; } }
 function markStartSeen() { try { sessionStorage.setItem(START_SEEN, TOKEN); } catch { /* private mode: show it again next load */ } }
 
+let selectedDemoId = "alphafold";
+
+function selectDemo(demoId) {
+  selectedDemoId = demoId;
+  $$("#start-demos .start-demo").forEach((b) => {
+    b.classList.toggle("selected", b.dataset.demo === demoId);
+  });
+  const isAlpha = demoId === "alphafold";
+  const cmd = `python3 tools/replay.py demo/${demoId}.jsonl --speed 15`;
+  const codeEl = $("#replay-cmd-code");
+  if (codeEl) codeEl.textContent = cmd;
+  const tagEl = $("#replay-selected-tag");
+  if (tagEl) tagEl.textContent = isAlpha ? "AlphaFold 2" : "Hospital Readmission";
+  const replayBtn = $("#start-replay-btn");
+  if (replayBtn) replayBtn.textContent = isAlpha ? "▶ Run Live Replay in Webpage" : "▶ Run Live Replay: Hospital Readmission";
+  const loadBtn = $("#start-load-btn");
+  if (loadBtn) loadBtn.textContent = isAlpha ? "⚡ Load Instantly" : "⚡ Load Hospital Instantly";
+}
+
 async function openStart() {
   const [{ demos, current }, snap] = await Promise.all([api("/api/demos"), api("/api/events")]);
   const n = snap.events.length;
@@ -692,10 +727,11 @@ async function openStart() {
   cont.innerHTML = n ? `<b>Continue: ${esc(snap.project || "current study")}</b><small>${n} ${n === 1 ? "entry" : "entries"}${current ? " · demo" : ""}</small>` : "";
   $("#start-demos").innerHTML = demos.map((d) => {
     const isFeatured = d.id === "alphafold";
-    return `<button type="button" class="start-demo ${isFeatured ? "featured-demo" : ""}" data-demo="${esc(d.id)}" id="start-demo-${esc(d.id)}">
+    return `<button type="button" class="start-demo ${isFeatured ? "featured-demo" : ""}" data-demo="${esc(d.id)}" id="start-demo-${esc(d.id)}" title="Click to select ${esc(d.title)}">
       ${isFeatured ? '<div class="demo-badge-row"><span class="badge featured-badge">⭐ Task 2 Featured Demo</span><span class="badge-sub">Step 4 Pivot</span></div>' : ""}
       <b>${esc(d.title)}</b><span class="muted">${esc(d.summary)}</span></button>`;
   }).join("");
+  selectDemo(snap.demo || selectedDemoId || "alphafold");
   const warn = $("#start-warn");
   warn.hidden = !n;
   warn.textContent = n ? `Starting a notebook or loading a demo replaces the current diary (${n} ${n === 1 ? "entry" : "entries"}) and its raw capture. Export it first to keep it.` : "";
@@ -714,13 +750,17 @@ function closeStart() {
 let replayActive = false;
 let replayAborted = false;
 
-async function runLiveReplay(demoId = "alphafold") {
+async function runLiveReplay(demoId) {
+  demoId = demoId || selectedDemoId || "alphafold";
   if (replayActive) return;
   replayActive = true;
   replayAborted = false;
 
   closeStart();
   showTab("diary");
+
+  const isAlpha = demoId === "alphafold";
+  const demoTitle = isAlpha ? "AlphaFold 2" : "Hospital Readmission";
 
   const banner = $("#replay-banner");
   const bannerText = $("#replay-banner-text");
@@ -729,14 +769,14 @@ async function runLiveReplay(demoId = "alphafold") {
 
   if (banner) {
     banner.hidden = false;
-    bannerText.innerHTML = "<strong>Replaying AlphaFold 2 capture session</strong> (15x speed)...";
+    bannerText.innerHTML = `<strong>Replaying ${demoTitle} capture session</strong> (live demonstration)...`;
     bannerProgress.textContent = "initializing...";
   }
 
   const finishReplay = () => {
     if (bannerText) bannerText.innerHTML = "<strong>Replay complete!</strong> Press Ask to audit the Step 4 pivot.";
     if (bannerProgress) bannerProgress.textContent = "11 events active";
-    toast("AlphaFold 2 replay complete! Notice the pivot at Step 4.");
+    toast(`${demoTitle} replay complete! Notice the pivot at Step 4.`);
     setTimeout(() => { if (banner) banner.hidden = true; }, 4500);
 
     // Switch focus smoothly to the Auditor Station
@@ -827,41 +867,49 @@ $("#start-new").addEventListener("submit", (e) => {
 $("#start-demos").addEventListener("click", (e) => {
   const b = e.target.closest("[data-demo]");
   if (!b) return;
-  const demoId = b.dataset.demo;
-  busy(b, async () => {
-    const r = await api("/api/demo", { id: demoId });
-    await afterNewStudy();
-    focusLatestStep();
-    toast(`Demo loaded: ${r.events} entries. Press ▶ Replay to watch it step-by-step, or click Ask to audit.`);
-    if (demoId === "alphafold") {
-      $("#ask-input").value = "Why did they change approach at step 4?";
-    }
-  });
+  selectDemo(b.dataset.demo);
 });
+
+const startLoadBtn = $("#start-load-btn");
+if (startLoadBtn) {
+  startLoadBtn.addEventListener("click", () => {
+    busy(startLoadBtn, async () => {
+      const demoId = selectedDemoId || "alphafold";
+      const r = await api("/api/demo", { id: demoId });
+      await afterNewStudy();
+      focusLatestStep();
+      const isAlpha = demoId === "alphafold";
+      const demoTitle = isAlpha ? "AlphaFold 2" : "Hospital Readmission";
+      toast(`${demoTitle} loaded: ${r.events} entries. Press ▶ Replay to watch it step-by-step, or click Ask to audit.`);
+      $("#ask-input").value = "Why did they change approach at step 4?";
+    });
+  });
+}
 
 const startReplayBtn = $("#start-replay-btn");
 if (startReplayBtn) {
-  startReplayBtn.addEventListener("click", () => runLiveReplay("alphafold"));
+  startReplayBtn.addEventListener("click", () => runLiveReplay(selectedDemoId));
 }
 
 const hdrReplayBtn = $("#hdr-replay-btn");
 if (hdrReplayBtn) {
-  hdrReplayBtn.addEventListener("click", () => runLiveReplay("alphafold"));
+  hdrReplayBtn.addEventListener("click", () => runLiveReplay(state.demo || selectedDemoId || "alphafold"));
 }
 
 const tlReplayBtn = $("#tl-replay-btn");
 if (tlReplayBtn) {
-  tlReplayBtn.addEventListener("click", () => runLiveReplay("alphafold"));
+  tlReplayBtn.addEventListener("click", () => runLiveReplay(state.demo || selectedDemoId || "alphafold"));
 }
 
 const replayCodeBtn = $("#replay-code-btn");
 if (replayCodeBtn) {
   replayCodeBtn.addEventListener("click", async () => {
+    const cmd = `python3 tools/replay.py demo/${selectedDemoId}.jsonl --speed 15`;
     try {
-      await navigator.clipboard.writeText("python3 tools/replay.py demo/alphafold.jsonl --speed 15");
+      await navigator.clipboard.writeText(cmd);
       toast("Replay command copied! Press ▶ Run Live Replay below to watch in browser.");
     } catch {
-      toast("Command: python3 tools/replay.py demo/alphafold.jsonl --speed 15");
+      toast("Command: " + cmd);
     }
     const btn = $("#start-replay-btn");
     if (btn) {
@@ -881,11 +929,12 @@ const copyReplayBtn = $("#copy-replay-btn");
 if (copyReplayBtn) {
   copyReplayBtn.addEventListener("click", async (e) => {
     e.stopPropagation();
+    const cmd = `python3 tools/replay.py demo/${selectedDemoId}.jsonl --speed 15`;
     try {
-      await navigator.clipboard.writeText("python3 tools/replay.py demo/alphafold.jsonl --speed 15");
-      toast("Copied: python3 tools/replay.py demo/alphafold.jsonl --speed 15");
+      await navigator.clipboard.writeText(cmd);
+      toast("Copied: " + cmd);
     } catch {
-      toast("Command: python3 tools/replay.py demo/alphafold.jsonl --speed 15");
+      toast("Command: " + cmd);
     }
   });
 }

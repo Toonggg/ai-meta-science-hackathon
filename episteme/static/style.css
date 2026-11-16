@@ -395,6 +395,30 @@ table.st tr.off td { color: var(--muted); }
 }
 
 /* Featured Demo & Badges */
+.start-demo {
+  position: relative;
+  transition: all .15s ease;
+  cursor: pointer;
+}
+.start-demo.selected {
+  border-color: var(--accent) !important;
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel)) !important;
+  box-shadow: 0 0 0 2px var(--accent), 0 4px 12px color-mix(in srgb, var(--accent) 25%, transparent) !important;
+}
+.start-demo.selected::after {
+  content: "✓ Selected";
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  background: var(--accent);
+  color: var(--accent-ink);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
 .start-demo.featured-demo {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
   background: color-mix(in srgb, var(--accent) 5%, var(--panel));

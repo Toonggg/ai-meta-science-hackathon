@@ -72,7 +72,7 @@
         <h2>Load a demo</h2>
         <p class="muted">A simulated study captured as a real session would be, with a change of approach at step 4. Ask the log why.</p>
         <div id="start-demos" class="start-demos">
-          <button type="button" class="start-demo featured-demo" data-demo="alphafold" id="start-demo-alphafold" title="Load the AlphaFold 2 discovery demo">
+          <button type="button" class="start-demo featured-demo selected" data-demo="alphafold" id="start-demo-alphafold" title="Click to select AlphaFold 2 discovery demo">
             <div class="demo-badge-row">
               <span class="badge featured-badge">⭐ Task 2 Featured Demo</span>
               <span class="badge-sub">Step 4 Pivot</span>
@@ -80,7 +80,7 @@
             <b>AlphaFold 2 discovery (CASP14)</b>
             <span class="muted">11 steps · PDB distograms fail at GDT 62 → end-to-end attention with Evoformer hits GDT 92.4</span>
           </button>
-          <button type="button" class="start-demo" data-demo="hospital-readmission" title="Load the hospital readmission model demo">
+          <button type="button" class="start-demo" data-demo="hospital-readmission" id="start-demo-hospital-readmission" title="Click to select hospital readmission model demo">
             <b>Hospital readmission risk model</b>
             <span class="muted">11 steps · XGBoost baseline overfits on site id → temporal split with clinical embeddings</span>
           </button>
@@ -88,7 +88,7 @@
         <div class="start-replay-box" id="start-replay-box">
           <div class="replay-head">
             <span class="replay-label">⚡ <strong>Live Replay (tools/replay.py)</strong></span>
-            <span class="replay-tag">Paced</span>
+            <span class="replay-tag" id="replay-selected-tag">AlphaFold 2</span>
           </div>
           <div class="replay-code-row" id="replay-code-btn" role="button" tabindex="0" title="Click to copy replay command">
             <code id="replay-cmd-code">python3 tools/replay.py demo/alphafold.jsonl --speed 15</code>
@@ -96,6 +96,7 @@
           </div>
           <div class="replay-actions">
             <button type="button" class="btn primary small replay-web-btn" id="start-replay-btn">▶ Run Live Replay in Webpage</button>
+            <button type="button" class="btn secondary small" id="start-load-btn" title="Load the selected demo study immediately">⚡ Load Instantly</button>
             <button type="button" class="btn ghost small" id="copy-replay-btn">📋 Copy</button>
           </div>
         </div>
