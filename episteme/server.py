@@ -44,7 +44,7 @@ MAX_BODY = 5 * 1024 * 1024
 # tools (tools/replay.py). It stops other web pages and naive scripts; anything that can read the
 # user's files can read it too.
 TOKEN = secrets.token_urlsafe(24)
-NEEDS_TOKEN = {"/api/confirm", "/api/pivot", "/api/delete", "/api/demo", "/api/clear", "/api/settings", "/api/sources"}
+NEEDS_TOKEN = {"/api/confirm", "/api/pivot", "/api/delete", "/api/demo", "/api/demo/step", "/api/clear", "/api/settings", "/api/sources"}
 # Attribution is decided by Episteme (stitcher, confirm flow), never taken from a posted event.
 ATTRIBUTION_FIELDS = ("actor", "confirmation", "confirmed_by", "confirmed_at", "skipped_at", "classified_by",
                       "needs_confirmation", "quote", "model_summary", "proposed_reason", "pending", "episode_id",
@@ -163,6 +163,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {"prompts": diary.prompts(STORE.snapshot()["events"])})
         if p == "/api/demos":
             return self.send(200, {"demos": demos.list_demos(), "current": STORE.snapshot().get("demo")})
+        if p == "/api/demo-lines":
+            demo_id = parse_qs(u.query).get("id", ["alphafold"])[0]
+            try:
+                return self.send(200, {"lines": demos.session(demo_id)})
+            except KeyError:
+                return self.send(404, {"error": "unknown demo"})
         if p == "/api/demo-paper":  # the paper of the demo that is loaded, if it has one
             demo_id = STORE.snapshot().get("demo")
             text = demos.paper(demo_id) if demo_id else ""
@@ -240,6 +246,40 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError as e:
                     return self.send(400, {"error": str(e)})
                 return self.send(200, {"ok": True, "events": len(STORE.events())})
+            if p == "/api/demo/step":  # {"id": "alphafold", "step": i, "reset": true}: step through demo session
+                demo_id = b.get("id", "alphafold")
+                step_idx = int(b.get("step", 0))
+                try:
+                    d = demos.get(demo_id)
+                    lines = demos.session(demo_id)
+                except KeyError:
+                    return self.send(404, {"error": "unknown demo"})
+                if b.get("reset") or step_idx == 0:
+                    wipe(lambda: STORE.clear(d["project"], demo=demo_id))
+                if 0 <= step_idx < len(lines):
+                    line = lines[step_idx]
+                    kind = line.get("kind")
+                    if kind in ("note", "question"):
+                        if STITCHER:
+                            STITCHER.run_once(ask_model=False)
+                        ev = STORE.add(demos.note_event(line, STORE.events()))
+                        diary.after_add(STORE, ev)
+                    else:
+                        ev = dict(line)
+                        ev.pop("rid", None)
+                        RAW.add(ev)
+                        if STITCHER:
+                            STITCHER.run_once(ask_model=False)
+                if step_idx >= len(lines) - 1 and STITCHER:
+                    STITCHER.poke()
+                return self.send(200, {
+                    "ok": True,
+                    "step": step_idx,
+                    "total": len(lines),
+                    "events": len(STORE.events()),
+                    "line": lines[step_idx] if 0 <= step_idx < len(lines) else None,
+                    "done": step_idx >= len(lines) - 1
+                })
             if p == "/api/clear":  # fresh project: empty diary and raw log, optionally {"project": "name"}
                 wipe(lambda: STORE.clear(b.get("project")))
                 return self.send(200, {"ok": True})

@@ -1,17 +1,17 @@
 [
   {
+    "id": "alphafold",
+    "title": "AlphaFold 2 Discovery (CASP14) ⭐ [Featured Demo]",
+    "project": "AlphaFold 2 discovery (CASP14)",
+    "summary": "AlphaFold 1 stalls on CASP target T1024 (gdt_ts=61.2), triggering an auto-detected Surprise in the Hypothesis Ledger, leading to the step 4 pivot to end-to-end Evoformer + Invariant Point Attention, commit b8e104f, orphan evaluation, and domain caveats.",
+    "session": "alphafold.jsonl"
+  },
+  {
     "id": "hospital-readmission",
     "title": "Hospital Readmission (MIMIC-IV)",
     "project": "Readmission prediction from clinical notes",
     "summary": "TF-IDF baseline misses its AUROC target (0.54), leading to the step 4 pivot to frozen PubMedBERT (0.81), artifact archival, failure on pediatric notes, and future research questions.",
     "session": "hospital-readmission.jsonl",
     "paper": "hospital-readmission-paper.txt"
-  },
-  {
-    "id": "alphafold",
-    "title": "AlphaFold 2 Discovery (CASP14) ⭐",
-    "project": "AlphaFold 2 discovery (CASP14)",
-    "summary": "AlphaFold 1 stalls at GDT_TS 61.2 on T1024 (triggering a Surprise), leading to the step 4 pivot to end-to-end Evoformer + IPA, commit b8e104f, orphan target evaluation, and domain caveats.",
-    "session": "alphafold.jsonl"
   }
 ]

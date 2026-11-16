@@ -70,9 +70,33 @@
       <div class="card start-card">
         <h2>Load a demo</h2>
         <p class="muted">A simulated study captured as a real session would be, with a change of approach at step 4. Ask the log why.</p>
-        <div id="start-demos" class="start-demos"></div>
-        <div class="start-replay-hint muted small">
-          💡 <b>Live terminal replay:</b> <code>python3 tools/replay.py demo/alphafold.jsonl --speed 15</code>
+        <div id="start-demos" class="start-demos">
+          <button type="button" class="start-demo featured-demo" data-demo="alphafold" id="start-demo-alphafold" title="Load the AlphaFold 2 discovery demo">
+            <div class="demo-badge-row">
+              <span class="badge featured-badge">⭐ Task 2 Featured Demo</span>
+              <span class="badge-sub">Step 4 Pivot</span>
+            </div>
+            <b>AlphaFold 2 discovery (CASP14)</b>
+            <span class="muted">11 steps · PDB distograms fail at GDT 62 → end-to-end attention with Evoformer hits GDT 92.4</span>
+          </button>
+          <button type="button" class="start-demo" data-demo="hospital-readmission" title="Load the hospital readmission model demo">
+            <b>Hospital readmission risk model</b>
+            <span class="muted">11 steps · XGBoost baseline overfits on site id → temporal split with clinical embeddings</span>
+          </button>
+        </div>
+        <div class="start-replay-box" id="start-replay-box">
+          <div class="replay-head">
+            <span class="replay-label">⚡ <strong>Live Replay (tools/replay.py)</strong></span>
+            <span class="replay-tag">15x speed</span>
+          </div>
+          <div class="replay-code-row" id="replay-code-btn" role="button" tabindex="0" title="Click to run live replay in webpage or copy command">
+            <code id="replay-cmd-code">python3 tools/replay.py demo/alphafold.jsonl --speed 15</code>
+            <span class="run-badge" id="replay-run-badge">▶ Run in Webpage</span>
+          </div>
+          <div class="replay-actions">
+            <button type="button" class="btn primary small replay-web-btn" id="start-replay-btn">▶ Run Live Replay in Webpage</button>
+            <button type="button" class="btn ghost small" id="copy-replay-btn">📋 Copy Command</button>
+          </div>
         </div>
       </div>
     </div>
@@ -127,6 +151,14 @@
         </form>
         <div id="prompts"></div>
         <div id="confirms"></div>
+        <div id="replay-banner" class="replay-banner" hidden>
+          <div class="replay-banner-content">
+            <span class="pulse-dot"></span>
+            <span id="replay-banner-text"><strong>Replaying AlphaFold 2 capture session</strong> (15x speed)...</span>
+            <span id="replay-progress" class="replay-progress-count"></span>
+          </div>
+          <button type="button" id="replay-skip-btn" class="btn small">⚡ Skip to End</button>
+        </div>
         <div class="tl-head">
           <div class="dlg-tabs" id="view-pick">
             <button type="button" data-view="all" class="active">All</button>

@@ -656,8 +656,12 @@ async function openStart() {
   const cont = $("#start-continue");
   cont.hidden = !n;
   cont.innerHTML = n ? `<b>Continue: ${esc(snap.project || "current study")}</b><small>${n} ${n === 1 ? "entry" : "entries"}${current ? " · demo" : ""}</small>` : "";
-  $("#start-demos").innerHTML = demos.map((d) => `<button type="button" class="start-demo" data-demo="${esc(d.id)}">
-      <b>${esc(d.title)}</b><span class="muted">${esc(d.summary)}</span></button>`).join("");
+  $("#start-demos").innerHTML = demos.map((d) => {
+    const isFeatured = d.id === "alphafold";
+    return `<button type="button" class="start-demo ${isFeatured ? "featured-demo" : ""}" data-demo="${esc(d.id)}" id="start-demo-${esc(d.id)}">
+      ${isFeatured ? '<div class="demo-badge-row"><span class="badge featured-badge">⭐ Task 2 Featured Demo</span><span class="badge-sub">Step 4 Pivot</span></div>' : ""}
+      <b>${esc(d.title)}</b><span class="muted">${esc(d.summary)}</span></button>`;
+  }).join("");
   const warn = $("#start-warn");
   warn.hidden = !n;
   warn.textContent = n ? `Starting a notebook or loading a demo replaces the current diary (${n} ${n === 1 ? "entry" : "entries"}) and its raw capture. Export it first to keep it.` : "";
@@ -671,6 +675,76 @@ function closeStart() {
   $("#start").hidden = true;
   document.body.style.overflow = "";
   showTab("diary");
+}
+
+let replayActive = false;
+let replayAborted = false;
+
+async function runLiveReplay(demoId = "alphafold") {
+  if (replayActive) return;
+  replayActive = true;
+  replayAborted = false;
+
+  closeStart();
+  showTab("diary");
+
+  const banner = $("#replay-banner");
+  const bannerText = $("#replay-banner-text");
+  const bannerProgress = $("#replay-progress");
+  const skipBtn = $("#replay-skip-btn");
+
+  if (banner) {
+    banner.hidden = false;
+    bannerText.innerHTML = "<strong>Replaying AlphaFold 2 capture session</strong> (15x speed)...";
+    bannerProgress.textContent = "initializing...";
+  }
+
+  const finishReplay = () => {
+    if (bannerText) bannerText.innerHTML = "<strong>Replay complete!</strong> Auditing Step 4 pivot...";
+    if (bannerProgress) bannerProgress.textContent = "11 events active";
+    toast("AlphaFold 2 replay complete! Notice the pivot at Step 4.");
+    setTimeout(() => { if (banner) banner.hidden = true; }, 4500);
+    $("#ask-input").value = "Why did they change approach at step 4?";
+    $("#ask-form").requestSubmit();
+  };
+
+  const onSkip = async () => {
+    replayAborted = true;
+    if (bannerProgress) bannerProgress.textContent = "fast-forwarding...";
+    try {
+      await api("/api/demo", { id: demoId });
+      await afterNewStudy();
+      finishReplay();
+    } catch (err) {
+      toast("Error: " + err.message);
+    }
+  };
+  if (skipBtn) skipBtn.onclick = onSkip;
+
+  try {
+    const init = await api("/api/demo/step", { id: demoId, step: 0, reset: true });
+    await afterNewStudy();
+    const total = init.total || 15;
+
+    for (let i = 0; i < total; i++) {
+      if (replayAborted) break;
+      if (bannerProgress) bannerProgress.textContent = `step ${i + 1} of ${total}`;
+      if (i > 0) {
+        await api("/api/demo/step", { id: demoId, step: i });
+        await Promise.all([loadDiary(), loadConfirms(), refreshCapture()]);
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    if (!replayAborted) {
+      finishReplay();
+    }
+  } catch (e) {
+    toast("Live replay error: " + e.message);
+    if (banner) banner.hidden = true;
+  } finally {
+    replayActive = false;
+  }
 }
 
 async function afterNewStudy() { // a different diary: drop what the page showed for the old one
@@ -697,15 +771,57 @@ $("#start-new").addEventListener("submit", (e) => {
 $("#start-demos").addEventListener("click", (e) => {
   const b = e.target.closest("[data-demo]");
   if (!b) return;
+  const demoId = b.dataset.demo;
   busy(b, async () => {
-    const r = await api("/api/demo", { id: b.dataset.demo });
+    const r = await api("/api/demo", { id: demoId });
     await afterNewStudy();
-    toast(`Demo loaded: ${r.events} entries. Try asking why they changed approach at step 4.`);
+    toast(`Demo loaded: ${r.events} entries.`);
+    if (demoId === "alphafold") {
+      $("#ask-input").value = "Why did they change approach at step 4?";
+      $("#ask-form").requestSubmit();
+    }
   });
 });
+
+const startReplayBtn = $("#start-replay-btn");
+if (startReplayBtn) {
+  startReplayBtn.addEventListener("click", () => runLiveReplay("alphafold"));
+}
+
+const replayCodeBtn = $("#replay-code-btn");
+if (replayCodeBtn) {
+  replayCodeBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText("python3 tools/replay.py demo/alphafold.jsonl --speed 15");
+      toast("Replay command copied! Running live in webpage...");
+    } catch {}
+    runLiveReplay("alphafold");
+  });
+  replayCodeBtn.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      runLiveReplay("alphafold");
+    }
+  });
+}
+
+const copyReplayBtn = $("#copy-replay-btn");
+if (copyReplayBtn) {
+  copyReplayBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText("python3 tools/replay.py demo/alphafold.jsonl --speed 15");
+      toast("Copied: python3 tools/replay.py demo/alphafold.jsonl --speed 15");
+    } catch {
+      toast("Command: python3 tools/replay.py demo/alphafold.jsonl --speed 15");
+    }
+  });
+}
+
 const quickDemoBtn = $("#quick-demo-btn");
 if (quickDemoBtn) {
   quickDemoBtn.addEventListener("click", () => {
+    closeStart();
     busy(quickDemoBtn, async () => {
       const r = await api("/api/demo", { id: "alphafold" });
       await afterNewStudy();

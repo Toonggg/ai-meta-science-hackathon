@@ -20,7 +20,7 @@ import server  # noqa: E402
 import stitcher  # noqa: E402
 from store import Diary, RawLog  # noqa: E402
 
-IDS = ["hospital-readmission", "alphafold"]
+IDS = ["alphafold", "hospital-readmission"]
 # Same story shape for both: plan, run, surprise, pivot at step 4, new plan, run, commit.
 SHAPE = ["plan", "run", "surprise", "pivot", "plan", "run", "artifact"]
 
