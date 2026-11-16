@@ -637,17 +637,67 @@ $("#ask-form").addEventListener("submit", (e) => {
   });
 });
 
-$("#reset-demo").addEventListener("click", async () => {
-  await api("/api/reset", {}); $("#prompts").innerHTML = ""; delete $("#confirms").dataset.key;
-  await Promise.all([loadDiary(), loadConfirms(), refreshCapture()]); toast("Demo session reloaded");
-});
-$("#clear-diary").addEventListener("click", async () => {
-  if (!confirm("Remove all events and raw capture, and start an empty diary? (Export first if you want to keep them.)")) return;
-  const project = prompt("Project name for the new diary:", $("#project-name").textContent);
-  if (project === null) return; // cancelled: nothing removed
-  await api("/api/clear", { project }); $("#prompts").innerHTML = ""; delete $("#confirms").dataset.key;
+// ---------------------------------------------------------------- start screen
+// Shown once each time Episteme starts (the token changes per start), and from the logo.
+const START_SEEN = "episteme-start-seen";
+function startSeen() { try { return sessionStorage.getItem(START_SEEN) === TOKEN; } catch { return false; } }
+function markStartSeen() { try { sessionStorage.setItem(START_SEEN, TOKEN); } catch { /* private mode: show it again next load */ } }
+
+async function openStart() {
+  const [{ demos, current }, snap] = await Promise.all([api("/api/demos"), api("/api/events")]);
+  const n = snap.events.length;
+  const cont = $("#start-continue");
+  cont.hidden = !n;
+  cont.innerHTML = n ? `<b>Continue: ${esc(snap.project || "current study")}</b><small>${n} ${n === 1 ? "entry" : "entries"}${current ? " · demo" : ""}</small>` : "";
+  $("#start-demos").innerHTML = demos.map((d) => `<button type="button" class="start-demo" data-demo="${esc(d.id)}">
+      <b>${esc(d.title)}</b><span class="muted">${esc(d.summary)}</span></button>`).join("");
+  const warn = $("#start-warn");
+  warn.hidden = !n;
+  warn.textContent = n ? `Starting a notebook or loading a demo replaces the current diary (${n} ${n === 1 ? "entry" : "entries"}) and its raw capture. Export it first to keep it.` : "";
+  $("#start").hidden = false;
+  document.body.style.overflow = "hidden";
+  (n ? cont : $("#start-project")).focus();
+}
+
+function closeStart() {
+  markStartSeen();
+  $("#start").hidden = true;
+  document.body.style.overflow = "";
+  showTab("diary");
+}
+
+async function afterNewStudy() { // a different diary: drop what the page showed for the old one
+  $("#prompts").innerHTML = ""; $("#ask-out").innerHTML = ""; $("#c-out").innerHTML = ""; $("#c-input").value = "";
+  delete $("#confirms").dataset.key;
   await Promise.all([loadDiary(), loadConfirms(), refreshCapture()]);
+  closeStart();
+}
+
+$("#start-new").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const project = $("#start-project").value.trim();
+  if (!project) return $("#start-project").focus();
+  busy($("#start-new button"), async () => {
+    await api("/api/clear", { project });
+    $("#start-project").value = "";
+    await afterNewStudy();
+    toast("New notebook started. Add a plan with an expectation to begin.");
+    $("#add-title").focus();
+  });
 });
+$("#start-demos").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-demo]");
+  if (!b) return;
+  busy(b, async () => {
+    const r = await api("/api/demo", { id: b.dataset.demo });
+    await afterNewStudy();
+    toast(`Demo loaded: ${r.events} entries. Try asking why they changed approach at step 4.`);
+  });
+});
+$("#start-continue").addEventListener("click", closeStart);
+$("#open-start").addEventListener("click", () => openStart().catch((e) => toast("Error: " + e.message)));
+$("#new-study").addEventListener("click", () => openStart().catch((e) => toast("Error: " + e.message)));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#start").hidden && !$("#start-continue").hidden) closeStart(); });
 
 async function refreshCapture() {
   state.stitch = await api("/api/stitch").catch(() => null);
@@ -807,7 +857,11 @@ function renderJob(q, j) {
 }
 
 // ---------------------------------------------------------------- task 3: claims
-$("#c-demo").addEventListener("click", async () => { $("#c-input").value = (await api("/api/demo-paper")).text; });
+$("#c-demo").addEventListener("click", async () => {
+  const { text } = await api("/api/demo-paper");
+  if (!text) return toast("This study has no demo paper. Load the hospital-readmission demo from the start screen (click the logo).");
+  $("#c-input").value = text;
+});
 $("#c-run").addEventListener("click", () => {
   const text = $("#c-input").value.trim();
   if (!text) return toast("Paste some paper text, or load the demo paper");
@@ -845,6 +899,7 @@ function renderClaims(r) {
   await Promise.all([loadConfirms().catch(() => {}), refreshCapture().catch(() => {})]);
   const tab = location.hash.slice(1);
   if (["question", "diary", "claims"].includes(tab)) showTab(tab);
+  if (!startSeen()) await openStart().catch(() => {});
   setInterval(async () => { // pick up events from capture hooks, the stitcher and other tools
     const snap = await api("/api/events").catch(() => null);
     if (snap && snap.events) {

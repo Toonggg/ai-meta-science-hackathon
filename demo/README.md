@@ -16,10 +16,12 @@
 ```
 Opens Episteme at `http://127.0.0.1:8765`. It auto-loads credentials from `.env` (configured for Berget AI).
 
-### Step 2: Replay the AlphaFold Discovery Session
-In a second terminal:
+### Step 2: Load the AlphaFold Discovery Session
+On the start screen, choose **Load a demo → AlphaFold**. (Click the ◈ logo to get back to the start screen.)
+
+To watch the timeline fill in live instead, replay it from a second terminal:
 ```bash
-python3 tools/replay.py demo/alphafold_session.jsonl --clear --project "AlphaFold 2 Discovery (CASP14)" --speed 15
+python3 tools/replay.py demo/alphafold.jsonl --clear --project "AlphaFold 2 discovery (CASP14)" --speed 15
 ```
 *(Use `--instant` to load all events immediately without waiting).*
 
@@ -45,10 +47,12 @@ AI agents running headless benchmarks or automating evaluations can operate Epis
    SERVER_PID=$!
    ```
 
-2. **Replay Session Instantly:**
+2. **Load the Demo Instantly** (same result as the start screen):
    ```bash
-   python3 tools/replay.py demo/alphafold_session.jsonl --instant --clear --project "AlphaFold 2 Discovery"
+   curl -s http://127.0.0.1:8765/api/demo -H "x-episteme-token: $(cat .episteme/token)" \
+     -H 'Content-Type: application/json' -d '{"id": "alphafold"}'
    ```
+   `GET /api/demos` lists the demo ids. `python3 tools/replay.py demo/alphafold.jsonl --instant --clear` gives the same diary.
 
 3. **Verify Stitched Events via API:**
    ```bash

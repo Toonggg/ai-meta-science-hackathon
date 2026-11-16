@@ -15,8 +15,8 @@ Both research docs recommend **Task 2 (provenance diary)** as the core, and `cla
 | Step | Task | What you can try | Ideas used from the research |
 |---|---|---|---|
 | **1. Vet the question** | Task 1 | Paste a question. It runs through three visible stages (**local rules → literature search → AI refinement**) and gives ambiguous terms with how papers actually measure them, implicit assumptions, existing systematic reviews, candidate datasets, a **proceed / narrow / revise / stop** verdict, and a narrowing ladder. Every finding is tagged `rule`, `search` or `AI`. "Start diary with this" sends the result to step 2. | Term-sense mapper, assumption excavator, data-feasibility probe, narrowing ladder (Claude); Epistemic Interrogator, DataFeasibility Radar (Gemini) |
-| **2. Record the work** | Task 2 | A demo session with a pivot at **step 4**. Ask *"Why did they change approach at step 4?"*. Add a plan with `AUROC >= 0.85`, then a run that misses it, then a new plan. | Plan → Run → Surprise → Pivot timeline (both); **hypothesis ledger** that auto-flags contradicted expectations; **pivot micro-prompts** that ask "why?" in the moment; **stated vs inferred** labels; grounded "ask the log"; ⌘⇧E quick-drop thought (Gemini); PROV-JSON and decision-appendix export; HTTP ingest for agents and notebooks |
-| **3. Check the claims** | Task 3 | Load the demo paper and build the claim map. The paper overstates the diary's own results, and the map catches it. | Clickable claim map, hedging-vs-evidence calibrator, spin check, checked-vs-unverified ledger (Claude); ClaimTrace, CalibreSci (Gemini); claims linked back to the diary runs that produced them |
+| **2. Record the work** | Task 2 | Pick a demo on the start screen (hospital readmission or AlphaFold); both change approach at **step 4**. Ask *"Why did they change approach at step 4?"*. Add a plan with `AUROC >= 0.85`, then a run that misses it, then a new plan. | Plan → Run → Surprise → Pivot timeline (both); **hypothesis ledger** that auto-flags contradicted expectations; **pivot micro-prompts** that ask "why?" in the moment; **stated vs inferred** labels; grounded "ask the log"; ⌘⇧E quick-drop thought (Gemini); PROV-JSON and decision-appendix export; HTTP ingest for agents and notebooks |
+| **3. Check the claims** | Task 3 | With the hospital-readmission demo open, load its paper and build the claim map. The paper overstates the diary's own results, and the map catches it. | Clickable claim map, hedging-vs-evidence calibrator, spin check, checked-vs-unverified ledger (Claude); ClaimTrace, CalibreSci (Gemini); claims linked back to the diary runs that produced them |
 
 The success criterion in the brief, *"a reviewer who wasn't there can answer 'why did they change approach at step 4?'"*, is built into the diary as a feature.
 
@@ -70,6 +70,12 @@ curl -s http://127.0.0.1:8765/api/events -H 'content-type: application/json' \
 
 Event types: `plan` (with `expectation`), `run` (with `result`, `status`, `code`, `params`, `data`), `surprise`, `pivot`, `note`, `artifact`. A Claude Code hook, a Jupyter cell magic or a browser extension would all send events to this endpoint. That is how the Chrome side-panel version described in both research docs would plug in.
 
+## Start screen and demos
+
+Each time Episteme starts it opens on a start screen: start a **new study notebook** (an empty diary with a project name), **load a demo**, or continue the open study. Click the ◈ logo to come back to it. Starting or loading replaces the open diary, so export it first to keep it.
+
+The demos are simulated studies, not real published work. Each one is a recorded capture session in `demo/`, listed in `demo/demos.json`, and loads through the same path as live capture: raw events go into the raw log, then episodes and the stitcher build the diary. Lines with `"kind": "note"` are researcher notes typed into the diary while the capture runs. A demo can come with a paper for Check claims. To add a demo, add a `.jsonl` session and an entry in `demos.json`. `tools/replay.py demo/<id>.jsonl` plays the same file with real-time pacing.
+
 ## Layout
 
 ```
@@ -81,6 +87,7 @@ episteme/pipeline.py   Task 1 staged job: local rules -> search -> AI refinement
 episteme/question.py   Task 1 rules + prompts
 episteme/diary.py      Task 2: ledger, micro-prompts, ask-the-log
 episteme/claims.py     Task 3
+episteme/demos.py      demo studies (demo/demos.json): one format, loaded like live capture
 episteme/export.py     JSON, W3C PROV-JSON, Markdown decision appendix
 episteme/static/       UI (vanilla HTML/CSS/JS); themes.css is generated
 tools/build_themes.py  theme palettes + WCAG contrast check/adjust

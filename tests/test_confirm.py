@@ -131,13 +131,6 @@ class ConfirmTest(unittest.TestCase):
         self.assertIn(("ep:model_flash", "ep:classifier"), roles)
         self.assertIn(("ep:ai_assistant", "ep:author"), roles)
 
-    def test_demo_has_actors(self):
-        self.store.reset_demo()
-        evs = self.store.events()
-        self.assertTrue(all(e.get("actor") for e in evs))
-        self.assertIn("stated by the researcher",
-                      diary.ask_heuristic("Why did they change approach at step 4?", self.store.snapshot()["events"]))
-
 
 if __name__ == "__main__":
     unittest.main()

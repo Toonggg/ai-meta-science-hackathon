@@ -21,6 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import claims  # noqa: E402
+import demos  # noqa: E402
 import diary  # noqa: E402
 import episodes  # noqa: E402
 import export  # noqa: E402
@@ -29,7 +30,6 @@ import pipeline  # noqa: E402
 import question  # noqa: E402
 import search  # noqa: E402
 import stitcher  # noqa: E402
-from demo_data import DEMO_PAPER  # noqa: E402
 from store import RAW_KINDS, Diary, RawLog  # noqa: E402
 
 STATIC = os.path.join(HERE, "static")
@@ -44,7 +44,7 @@ MAX_BODY = 5 * 1024 * 1024
 # tools (tools/replay.py). It stops other web pages and naive scripts; anything that can read the
 # user's files can read it too.
 TOKEN = secrets.token_urlsafe(24)
-NEEDS_TOKEN = {"/api/confirm", "/api/pivot", "/api/delete", "/api/reset", "/api/clear", "/api/settings", "/api/sources"}
+NEEDS_TOKEN = {"/api/confirm", "/api/pivot", "/api/delete", "/api/demo", "/api/clear", "/api/settings", "/api/sources"}
 # Attribution is decided by Episteme (stitcher, confirm flow), never taken from a posted event.
 ATTRIBUTION_FIELDS = ("actor", "confirmation", "confirmed_by", "confirmed_at", "skipped_at", "classified_by",
                       "needs_confirmation", "quote", "model_summary", "proposed_reason", "pending", "episode_id",
@@ -61,6 +61,28 @@ def wipe(reset_diary):
         STITCHER.reset(also=both)
     else:
         both()
+
+
+def load_demo(demo_id):
+    """Replace the diary with a demo. Every demo goes through the same path as live capture:
+    raw events into the raw log, then the stitcher's rules; researcher notes are added once
+    the events before them are stitched. The background stitcher asks the model about any
+    pending pivots afterwards, so loading never waits on a model."""
+    d = demos.get(demo_id)
+    lines = demos.session(demo_id)
+    wipe(lambda: STORE.clear(d["project"], demo=demo_id))
+    for kind, batch in demos.chunks(lines):
+        if kind == "raw":
+            for ev in batch:
+                RAW.add(ev)
+            if STITCHER:
+                STITCHER.run_once(ask_model=False)
+        else:
+            for line in batch:
+                ev = STORE.add(demos.note_event(line, STORE.events()))
+                diary.after_add(STORE, ev)
+    if STITCHER:
+        STITCHER.poke()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -139,8 +161,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, STITCHER.status())
         if p == "/api/prompts":  # pivots waiting for the researcher's confirm / edit / skip
             return self.send(200, {"prompts": diary.prompts(STORE.snapshot()["events"])})
-        if p == "/api/demo-paper":
-            return self.send(200, {"text": DEMO_PAPER})
+        if p == "/api/demos":
+            return self.send(200, {"demos": demos.list_demos(), "current": STORE.snapshot().get("demo")})
+        if p == "/api/demo-paper":  # the paper of the demo that is loaded, if it has one
+            demo_id = STORE.snapshot().get("demo")
+            text = demos.paper(demo_id) if demo_id else ""
+            return self.send(200, {"text": text, "demo": demo_id})
         if p == "/api/export":
             fmt = parse_qs(u.query).get("format", ["md"])[0]
             snap = STORE.snapshot()
@@ -208,9 +234,12 @@ class Handler(BaseHTTPRequestHandler):
             if p == "/api/delete":
                 STORE.delete(b["id"])
                 return self.send(200, {"ok": True})
-            if p == "/api/reset":  # the demo diary has no raw capture behind it
-                wipe(lambda: STORE.reset_demo())
-                return self.send(200, {"ok": True})
+            if p == "/api/demo":  # {"id": "alphafold"}: replace the diary with a demo study
+                try:
+                    load_demo(b["id"])
+                except ValueError as e:
+                    return self.send(400, {"error": str(e)})
+                return self.send(200, {"ok": True, "events": len(STORE.events())})
             if p == "/api/clear":  # fresh project: empty diary and raw log, optionally {"project": "name"}
                 wipe(lambda: STORE.clear(b.get("project")))
                 return self.send(200, {"ok": True})

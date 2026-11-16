@@ -68,7 +68,7 @@ class ServerSecurityTest(unittest.TestCase):
         self.assertEqual(self.call("/api/raw", {"kind": "stop"}, Origin="http://127.0.0.1:%d" % self.port)[0], 200)
 
     def test_page_actions_need_the_token(self):
-        for path in ("/api/settings", "/api/clear", "/api/reset", "/api/confirm", "/api/delete", "/api/pivot"):
+        for path in ("/api/settings", "/api/clear", "/api/demo", "/api/confirm", "/api/delete", "/api/pivot"):
             self.assertEqual(self.call(path, {})[0], 403, path)
         self.assertEqual(self.call("/api/clear", {}, x_episteme_token=server.TOKEN)[0], 200)
         self.assertEqual(self.call("/api/clear", {}, x_episteme_token="wrong")[0], 403)
