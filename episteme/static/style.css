@@ -370,6 +370,23 @@ table.st tr.off td { color: var(--muted); }
   color: var(--accent-ink);
   border-color: var(--accent);
 }
+.hdr-replay-btn {
+  font-weight: 600;
+  border-radius: var(--radius);
+  transition: all .2s ease;
+}
+.replay-diary-btn {
+  margin-left: auto;
+  font-weight: 600;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  transition: all .2s ease;
+}
+.replay-diary-btn:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
 .start-sub {
   color: var(--accent);
   font-size: 14px;

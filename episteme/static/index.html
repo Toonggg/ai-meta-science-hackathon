@@ -23,7 +23,8 @@
     <span><strong>Task 2 MVP:</strong> Provenance Lab Notebook</span>
   </div>
   <div class="hdr-actions">
-    <button type="button" class="btn ghost small quick-demo-btn" id="quick-demo-btn" title="Quickly load the AlphaFold 2 discovery demo">⚡ Load AlphaFold Demo</button>
+    <button type="button" class="btn ghost small quick-demo-btn" id="quick-demo-btn" title="Load the AlphaFold 2 discovery demo">⚡ Load AlphaFold Demo</button>
+    <button type="button" class="btn primary small hdr-replay-btn" id="hdr-replay-btn" title="Replay AlphaFold 2 session live step-by-step">▶ Replay Demo</button>
   </div>
   <details class="ai hdr-menu" id="hdr-menu">
     <summary class="badge" id="hdr-sum" title="Model, search and theme">…</summary>
@@ -87,15 +88,15 @@
         <div class="start-replay-box" id="start-replay-box">
           <div class="replay-head">
             <span class="replay-label">⚡ <strong>Live Replay (tools/replay.py)</strong></span>
-            <span class="replay-tag">15x speed</span>
+            <span class="replay-tag">Paced</span>
           </div>
-          <div class="replay-code-row" id="replay-code-btn" role="button" tabindex="0" title="Click to run live replay in webpage or copy command">
+          <div class="replay-code-row" id="replay-code-btn" role="button" tabindex="0" title="Click to copy replay command">
             <code id="replay-cmd-code">python3 tools/replay.py demo/alphafold.jsonl --speed 15</code>
-            <span class="run-badge" id="replay-run-badge">▶ Run in Webpage</span>
+            <span class="run-badge" id="replay-run-badge">📋 Copy Command</span>
           </div>
           <div class="replay-actions">
             <button type="button" class="btn primary small replay-web-btn" id="start-replay-btn">▶ Run Live Replay in Webpage</button>
-            <button type="button" class="btn ghost small" id="copy-replay-btn">📋 Copy Command</button>
+            <button type="button" class="btn ghost small" id="copy-replay-btn">📋 Copy</button>
           </div>
         </div>
       </div>
@@ -154,7 +155,7 @@
         <div id="replay-banner" class="replay-banner" hidden>
           <div class="replay-banner-content">
             <span class="pulse-dot"></span>
-            <span id="replay-banner-text"><strong>Replaying AlphaFold 2 capture session</strong> (15x speed)...</span>
+            <span id="replay-banner-text"><strong>Replaying AlphaFold 2 capture session</strong> (live demonstration)...</span>
             <span id="replay-progress" class="replay-progress-count"></span>
           </div>
           <button type="button" id="replay-skip-btn" class="btn small">⚡ Skip to End</button>
@@ -165,6 +166,7 @@
             <button type="button" data-view="decisions" title="Plans, pivots, surprises, notes and failed runs">Decisions</button>
             <button type="button" data-view="raw" title="Everything the capture hooks recorded, grouped into episodes">Raw capture</button>
           </div>
+          <button type="button" class="btn small primary-outline replay-diary-btn" id="tl-replay-btn" title="Replay the session step-by-step">▶ Replay Session</button>
           <span class="muted small" id="capture-status"></span>
         </div>
         <div id="raw-view" hidden></div>

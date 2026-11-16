@@ -734,7 +734,7 @@ async function runLiveReplay(demoId = "alphafold") {
   }
 
   const finishReplay = () => {
-    if (bannerText) bannerText.innerHTML = "<strong>Replay complete!</strong> Auditing Step 4 pivot...";
+    if (bannerText) bannerText.innerHTML = "<strong>Replay complete!</strong> Press Ask to audit the Step 4 pivot.";
     if (bannerProgress) bannerProgress.textContent = "11 events active";
     toast("AlphaFold 2 replay complete! Notice the pivot at Step 4.");
     setTimeout(() => { if (banner) banner.hidden = true; }, 4500);
@@ -750,7 +750,6 @@ async function runLiveReplay(demoId = "alphafold") {
       reviewerCard.focus({ preventScroll: true });
     }
     $("#ask-input").value = "Why did they change approach at step 4?";
-    $("#ask-form").requestSubmit();
   };
 
   const onSkip = async () => {
@@ -833,10 +832,9 @@ $("#start-demos").addEventListener("click", (e) => {
     const r = await api("/api/demo", { id: demoId });
     await afterNewStudy();
     focusLatestStep();
-    toast(`Demo loaded: ${r.events} entries.`);
+    toast(`Demo loaded: ${r.events} entries. Press ▶ Replay to watch it step-by-step, or click Ask to audit.`);
     if (demoId === "alphafold") {
       $("#ask-input").value = "Why did they change approach at step 4?";
-      $("#ask-form").requestSubmit();
     }
   });
 });
@@ -846,19 +844,35 @@ if (startReplayBtn) {
   startReplayBtn.addEventListener("click", () => runLiveReplay("alphafold"));
 }
 
+const hdrReplayBtn = $("#hdr-replay-btn");
+if (hdrReplayBtn) {
+  hdrReplayBtn.addEventListener("click", () => runLiveReplay("alphafold"));
+}
+
+const tlReplayBtn = $("#tl-replay-btn");
+if (tlReplayBtn) {
+  tlReplayBtn.addEventListener("click", () => runLiveReplay("alphafold"));
+}
+
 const replayCodeBtn = $("#replay-code-btn");
 if (replayCodeBtn) {
   replayCodeBtn.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText("python3 tools/replay.py demo/alphafold.jsonl --speed 15");
-      toast("Replay command copied! Running live in webpage...");
-    } catch {}
-    runLiveReplay("alphafold");
+      toast("Replay command copied! Press ▶ Run Live Replay below to watch in browser.");
+    } catch {
+      toast("Command: python3 tools/replay.py demo/alphafold.jsonl --speed 15");
+    }
+    const btn = $("#start-replay-btn");
+    if (btn) {
+      btn.classList.add("highlight-pulse");
+      setTimeout(() => btn.classList.remove("highlight-pulse"), 1200);
+    }
   });
   replayCodeBtn.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      runLiveReplay("alphafold");
+      $("#start-replay-btn")?.click();
     }
   });
 }
@@ -884,9 +898,8 @@ if (quickDemoBtn) {
       const r = await api("/api/demo", { id: "alphafold" });
       await afterNewStudy();
       focusLatestStep();
-      toast(`AlphaFold 2 demo loaded: ${r.events} entries. Auditing step 4 pivot...`);
+      toast("AlphaFold 2 demo loaded. Press ▶ Replay to watch it step-by-step, or click Ask to audit.");
       $("#ask-input").value = "Why did they change approach at step 4?";
-      $("#ask-form").requestSubmit();
     });
   });
 }
