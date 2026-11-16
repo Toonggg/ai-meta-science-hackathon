@@ -674,7 +674,9 @@ function closeStart() {
 }
 
 async function afterNewStudy() { // a different diary: drop what the page showed for the old one
-  $("#prompts").innerHTML = ""; $("#ask-out").innerHTML = ""; $("#c-out").innerHTML = ""; $("#c-input").value = "";
+  $("#prompts").innerHTML = ""; $("#ask-out").innerHTML = "";
+  if ($("#c-out")) $("#c-out").innerHTML = "";
+  if ($("#c-input")) $("#c-input").value = "";
   delete $("#confirms").dataset.key;
   await Promise.all([loadDiary(), loadConfirms(), refreshCapture()]);
   closeStart();
@@ -741,14 +743,16 @@ const Q_EXAMPLES = [
   "Among adult inpatients in MIMIC-IV, do discharge-note features predict 30-day readmission?",
   "Should AI systems replace human peer reviewers?",
 ];
-$("#q-examples").innerHTML = Q_EXAMPLES.map((q) => `<button type="button">${esc(q)}</button>`).join("");
-$$("#q-examples button").forEach((b) => b.addEventListener("click", () => { $("#q-input").value = b.textContent; $("#q-run").click(); }));
-$("#q-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
-    e.preventDefault();
-    $("#q-run").click();
-  }
-});
+if ($("#q-input")) {
+  $("#q-examples").innerHTML = Q_EXAMPLES.map((q) => `<button type="button">${esc(q)}</button>`).join("");
+  $$("#q-examples button").forEach((b) => b.addEventListener("click", () => { $("#q-input").value = b.textContent; $("#q-run").click(); }));
+  $("#q-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      $("#q-run").click();
+    }
+  });
+}
 
 // [P3] [D1] [W2] -> clickable chips that jump to the item in the results; [E4] -> diary
 function rich(text) {
@@ -769,36 +773,38 @@ document.addEventListener("click", (e) => {
 const originTag = (o) => o ? `<span class="origin o-${o}" title="${{ rule: "From local rules", search: "From literature search", ai: "From the AI model" }[o] || ""}">${o === "ai" ? "AI" : o}</span>` : "";
 
 let qPoll = null;
-$("#q-run").addEventListener("click", async () => {
-  const q = $("#q-input").value.trim();
-  if (!q) return $("#q-input").focus();
-  clearTimeout(qPoll);
-  qPoll = null;
-  const btn = $("#q-run");
-  btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>Running…`;
-  try {
-    const { job } = await api("/api/question/start", { question: q, use_search: useSearch(), use_ai: useAI() });
-    const tick = async () => {
-      const j = await api("/api/jobs/" + job);
-      renderJob(q, j);
-      if (j.status === "done") {
-        btn.disabled = false;
-        btn.textContent = "Stress-test";
-        clearTimeout(qPoll);
-        qPoll = null;
-      } else {
-        qPoll = setTimeout(tick, 600);
-      }
-    };
-    await tick();
-  } catch (e) {
-    toast("Error: " + e.message);
-    btn.disabled = false;
-    btn.textContent = "Stress-test";
+if ($("#q-run")) {
+  $("#q-run").addEventListener("click", async () => {
+    const q = $("#q-input").value.trim();
+    if (!q) return $("#q-input").focus();
     clearTimeout(qPoll);
     qPoll = null;
-  }
-});
+    const btn = $("#q-run");
+    btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>Running…`;
+    try {
+      const { job } = await api("/api/question/start", { question: q, use_search: useSearch(), use_ai: useAI() });
+      const tick = async () => {
+        const j = await api("/api/jobs/" + job);
+        renderJob(q, j);
+        if (j.status === "done") {
+          btn.disabled = false;
+          btn.textContent = "Stress-test";
+          clearTimeout(qPoll);
+          qPoll = null;
+        } else {
+          qPoll = setTimeout(tick, 600);
+        }
+      };
+      await tick();
+    } catch (e) {
+      toast("Error: " + e.message);
+      btn.disabled = false;
+      btn.textContent = "Stress-test";
+      clearTimeout(qPoll);
+      qPoll = null;
+    }
+  });
+}
 
 const ICON = { pending: "○", running: '<span class="spinner"></span>', done: "✓", skipped: "–", failed: "!" };
 function stageCard(key, title, st) {
@@ -876,17 +882,21 @@ function renderJob(q, j) {
 }
 
 // ---------------------------------------------------------------- task 3: claims
-$("#c-demo").addEventListener("click", async () => {
-  const { text } = await api("/api/demo-paper");
-  if (!text) return toast("This study has no demo paper. Load the hospital-readmission demo from the start screen (click the logo).");
-  $("#c-input").value = text;
-});
-$("#c-run").addEventListener("click", () => {
-  const text = $("#c-input").value.trim();
-  if (!text) return toast("Paste some paper text, or load the demo paper");
-  $("#c-out").innerHTML = `<div class="empty"><span class="spinner"></span>Analysing claims and cross-referencing with diary...</div>`;
-  busy($("#c-run"), async () => renderClaims(await api("/api/claims", { text, use_ai: useAI() })));
-});
+if ($("#c-demo")) {
+  $("#c-demo").addEventListener("click", async () => {
+    const { text } = await api("/api/demo-paper");
+    if (!text) return toast("This study has no demo paper. Load the hospital-readmission demo from the start screen (click the logo).");
+    $("#c-input").value = text;
+  });
+}
+if ($("#c-run")) {
+  $("#c-run").addEventListener("click", () => {
+    const text = $("#c-input").value.trim();
+    if (!text) return toast("Paste some paper text, or load the demo paper");
+    $("#c-out").innerHTML = `<div class="empty"><span class="spinner"></span>Analysing claims and cross-referencing with diary...</div>`;
+    busy($("#c-run"), async () => renderClaims(await api("/api/claims", { text, use_ai: useAI() })));
+  });
+}
 
 function renderClaims(r) {
   const counts = { supported: 0, weak: 0, overclaimed: 0, unsupported: 0 };

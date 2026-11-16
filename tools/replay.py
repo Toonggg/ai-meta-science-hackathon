@@ -32,7 +32,7 @@ import time
 import urllib.request
 from datetime import datetime
 
-KINDS = {"instruction", "action", "agent_text", "commit", "stop", "note"}
+KINDS = {"instruction", "action", "agent_text", "commit", "stop", "note", "question"}
 
 
 def load(path):
@@ -68,10 +68,11 @@ def post(url, path, body=None, timeout=30):
 
 
 def add_note(url, line):
-    """A researcher note: stitch what came before it, then add it to the diary (linked to the
+    """A researcher note or question: stitch what came before it, then add it to the diary (linked to the
     latest run when it says "about": "last_run"), as episteme/demos.py does."""
     post(url, "/api/stitch", {}, timeout=600)
-    ev = {"type": "note", "source": "manual", "title": line.get("title", ""), "detail": line.get("detail", "")}
+    t = line.get("kind") or "note"
+    ev = {"type": t, "source": "manual" if t == "note" else "episteme", "title": line.get("title", ""), "detail": line.get("detail", ""), "actor": "human", "provenance": "stated"}
     if line.get("ts"):
         ev["ts"] = line["ts"]
     if line.get("about") == "last_run":
@@ -82,10 +83,10 @@ def add_note(url, line):
 
 
 def send(url, batch):
-    """Raw events go to the raw log in one request; notes one at a time, in order."""
+    """Raw events go to the raw log in one request; notes/questions one at a time, in order."""
     raw = []
     for ev in batch:
-        if ev["kind"] == "note":
+        if ev["kind"] in ("note", "question"):
             if raw:
                 post(url, "/api/raw", {"events": raw})
                 raw = []

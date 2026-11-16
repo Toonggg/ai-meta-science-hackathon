@@ -37,11 +37,17 @@ Show the audience the log populating in real time as an AI agent works:
    python3 tools/replay.py demo/alphafold.jsonl --clear --project "AlphaFold 2 discovery (CASP14)" --speed 15
    ```
 3. Watch the browser timeline stream events as they happen:
-   - **Step 1 (Plan):** Expectation set: `GDT_TS >= 80.0`.
-   - **Step 2 (Run):** Dilated ResNet + physical gradient descent fails on CASP target `T1024` (`gdt_ts=61.2`).
-   - **Step 3 (Surprise):** Auto-detected contradiction in the Hypothesis Ledger (`Missed target by -18.8`).
-   - **Step 4 (Pivot):** Proposes end-to-end Evoformer + Invariant Point Attention head. Click **Confirm** (`Agent Stated ✓`).
-   - **Step 5 (Run & Artifact):** Reaches `gdt_ts=89.4`, followed by Git commit `b8e104f`.
+   - **Step 1 (Plan):** Expectation set: `GDT_TS >= 80.0` (badge: `researcher`).
+   - **Step 2 (Run):** Dilated ResNet + physical gradient descent fails on CASP target `T1024` (`gdt_ts=61.2`, badge: `agent`, status `ok`).
+   - **Step 3 (Surprise):** Auto-detected contradiction in the Hypothesis Ledger (`Missed target by -18.8`, badge: `inferred`).
+   - **Step 4 (Pivot):** Proposes end-to-end Evoformer + Invariant Point Attention head (badge: `pending`). Click **Confirm** to lock in attribution (`agent ✓`).
+   - **Step 5 (Plan):** End-to-end geometry prediction (badge: `researcher`).
+   - **Step 6 (Run):** Reaches `gdt_ts=89.4`, `plddt=92.1` (badge: `agent`, status `ok`).
+   - **Step 7 (Artifact):** Git commit `b8e104f` (badge: `agent`).
+   - **Step 8 (Plan):** Generalization stress-test on orphan sequence (badge: `researcher`).
+   - **Step 9 (Run - Failed):** Crash due to zero MSA depth on orphan target (badge: `agent`, status `failed`).
+   - **Step 10 (Note):** Researcher domain reflection and caveat (badge: `researcher`).
+   - **Step 11 (Question):** Follow-up research question on protein language models (badge: `researcher`).
 
 ---
 

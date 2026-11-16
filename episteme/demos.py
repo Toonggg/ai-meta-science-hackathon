@@ -53,7 +53,7 @@ def session(demo_id):
                 lines.append(json.loads(line))
             except ValueError:
                 raise ValueError("%s line %d is not valid JSON" % (demo_id, n))
-            if lines[-1].get("kind") not in RAW_KINDS | {"note"}:
+            if lines[-1].get("kind") not in RAW_KINDS | {"note", "question"}:
                 raise ValueError("%s line %d has an unknown kind: %r" % (demo_id, n, lines[-1].get("kind")))
     return lines
 
@@ -62,7 +62,7 @@ def chunks(lines):
     """Split a session into ("raw", [...]) and ("notes", [...]) runs, keeping their order."""
     out = []
     for line in lines:
-        kind = "notes" if line.get("kind") == "note" else "raw"
+        kind = "notes" if line.get("kind") in ("note", "question") else "raw"
         if out and out[-1][0] == kind:
             out[-1][1].append(line)
         else:
@@ -71,8 +71,14 @@ def chunks(lines):
 
 
 def note_event(line, events):
-    """The diary event for a note line, given the diary as it stands when the note is added."""
-    ev = {"type": "note", "source": "manual", "title": line.get("title", ""), "detail": line.get("detail", "")}
+    """The diary event for a note or question line, given the diary as it stands when it is added."""
+    t = line.get("kind") or "note"
+    ev = {"type": t, "source": "manual" if t == "note" else "episteme", "title": line.get("title", ""), "detail": line.get("detail", "")}
+    if line.get("actor"):
+        ev["actor"] = line["actor"]
+    elif t in ("note", "question"):
+        ev["actor"] = "human"
+        ev["provenance"] = "stated"
     if line.get("ts"):
         ev["ts"] = line["ts"]
     if line.get("about") == "last_run":
