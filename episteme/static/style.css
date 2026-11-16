@@ -440,3 +440,23 @@ table.st tr.off td { color: var(--muted); }
   background: var(--accent);
   color: var(--accent-ink);
 }
+
+.brand-logo-img {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.start-icon-wrap {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.start-logo-img {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 40%, transparent);
+}

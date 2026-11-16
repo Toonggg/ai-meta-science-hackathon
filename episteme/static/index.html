@@ -8,11 +8,14 @@
 <script>document.documentElement.dataset.theme = localStorage.getItem("theme") || "tokyo-night";</script>
 <link rel="stylesheet" href="/themes.css">
 <link rel="stylesheet" href="/style.css">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="alternate icon" type="image/png" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 </head>
 <body>
 <header>
   <button type="button" class="brand" id="open-start" title="Start screen: new study or demo">
-    <span class="logo">◈</span>
+    <img src="/favicon.svg" width="26" height="26" alt="Episteme logo" class="brand-logo-img">
     <span><strong>Episteme</strong><small>a flight recorder for AI-assisted research</small></span>
   </button>
   <div class="task-badge" id="task-badge" title="AI4MetaScience Hackathon · Task 2 Focus">
@@ -45,10 +48,12 @@
   </details>
 </header>
 
-<section id="start" hidden aria-labelledby="start-title">
+<section id="start" aria-labelledby="start-title">
   <div class="start-inner">
     <div class="start-head">
-      <span class="logo">◈</span>
+      <div class="start-icon-wrap">
+        <img src="/favicon.svg" width="60" height="60" alt="Episteme nano-banana logo" class="start-logo-img">
+      </div>
       <h1 id="start-title">Episteme</h1>
       <p class="start-sub"><strong>AI4MetaScience Hackathon · Task 2 MVP</strong></p>
       <p class="muted">A provenance-preserving flight recorder for AI-assisted research. Captures plans, runs, surprises, and pivots so any reviewer can answer: <em>"Why did they change approach at step 4?"</em></p>

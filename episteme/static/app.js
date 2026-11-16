@@ -928,7 +928,7 @@ function renderClaims(r) {
   await Promise.all([loadConfirms().catch(() => {}), refreshCapture().catch(() => {})]);
   const tab = location.hash.slice(1);
   if (["question", "diary", "claims"].includes(tab)) showTab(tab);
-  if (!startSeen()) await openStart().catch(() => {});
+  await openStart().catch(() => {});
   setInterval(async () => { // pick up events from capture hooks, the stitcher and other tools
     const snap = await api("/api/events").catch(() => null);
     if (snap && snap.events) {
