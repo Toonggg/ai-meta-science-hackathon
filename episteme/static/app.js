@@ -286,12 +286,13 @@ $("#st-check-all").addEventListener("click", async (e) => {
 });
 
 // ---------------------------------------------------------------- diary
-async function loadDiary() {
+async function loadDiary(focusNew = false) {
   const snap = await api("/api/events");
   state.events = snap.events;
   state.sig = snap.events.map((e) => `${e.id}:${e.ts}:${e.step}:${e.status || ""}:${e.confirmation || ""}:${e.title}`).join("|");
   $("#project-name").textContent = snap.project || "Research diary";
   renderTimeline();
+  if (focusNew) focusLatestStep();
 }
 
 // Who stated it: a short badge, the full sentence (from the server) on hover.
@@ -365,6 +366,25 @@ function renderTimeline() {
     ? `<li class="empty">No decisions yet. Switch to All to see every event.</li>`
     : `<li class="empty">Empty diary. Add a plan above, or stress-test a question in step 1 and start from there.</li>`;
   renderCaptureStatus();
+}
+
+function focusLatestStep() {
+  let target = null;
+  if (view === "raw") {
+    const rawCards = $$("#raw-view .card");
+    if (rawCards.length) target = rawCards[rawCards.length - 1];
+  } else {
+    const list = $$("#timeline li.ev");
+    if (list.length) target = list[list.length - 1];
+  }
+  if (target) {
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.classList.remove("highlight-pulse");
+    void target.offsetWidth;
+    target.classList.add("highlight-pulse");
+    target.setAttribute("tabindex", "-1");
+    target.focus({ preventScroll: true });
+  }
 }
 
 $("#view-pick").addEventListener("click", (e) => {
@@ -631,9 +651,23 @@ $("#ask-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const q = $("#ask-input").value.trim() || $("#ask-input").placeholder;
   $("#ask-input").value = q;
+  const reviewerCard = $(".reviewer-card");
+  if (reviewerCard) {
+    reviewerCard.scrollIntoView({ behavior: "smooth", block: "center" });
+    reviewerCard.classList.remove("highlight-pulse");
+    void reviewerCard.offsetWidth;
+    reviewerCard.classList.add("highlight-pulse");
+  }
   busy($("#ask-form button"), async () => {
     const res = await api("/api/ask", { question: q, use_ai: useAI() });
     $("#ask-out").innerHTML = `<div class="answer">${md(res.answer)}</div>${modeNote(res)}`;
+    $("#ask-out").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const ans = $("#ask-out .answer");
+    if (ans) {
+      ans.classList.add("highlight-pulse");
+      ans.setAttribute("tabindex", "-1");
+      ans.focus({ preventScroll: true });
+    }
   });
 });
 const goldenBtn = $("#golden-test-btn");
@@ -704,6 +738,17 @@ async function runLiveReplay(demoId = "alphafold") {
     if (bannerProgress) bannerProgress.textContent = "11 events active";
     toast("AlphaFold 2 replay complete! Notice the pivot at Step 4.");
     setTimeout(() => { if (banner) banner.hidden = true; }, 4500);
+
+    // Switch focus smoothly to the Auditor Station
+    const reviewerCard = $(".reviewer-card");
+    if (reviewerCard) {
+      reviewerCard.scrollIntoView({ behavior: "smooth", block: "center" });
+      reviewerCard.classList.remove("highlight-pulse");
+      void reviewerCard.offsetWidth;
+      reviewerCard.classList.add("highlight-pulse");
+      reviewerCard.setAttribute("tabindex", "-1");
+      reviewerCard.focus({ preventScroll: true });
+    }
     $("#ask-input").value = "Why did they change approach at step 4?";
     $("#ask-form").requestSubmit();
   };
@@ -714,6 +759,7 @@ async function runLiveReplay(demoId = "alphafold") {
     try {
       await api("/api/demo", { id: demoId });
       await afterNewStudy();
+      focusLatestStep();
       finishReplay();
     } catch (err) {
       toast("Error: " + err.message);
@@ -724,16 +770,27 @@ async function runLiveReplay(demoId = "alphafold") {
   try {
     const init = await api("/api/demo/step", { id: demoId, step: 0, reset: true });
     await afterNewStudy();
+    focusLatestStep();
     const total = init.total || 15;
 
     for (let i = 0; i < total; i++) {
       if (replayAborted) break;
-      if (bannerProgress) bannerProgress.textContent = `step ${i + 1} of ${total}`;
+      const stepNum = i + 1;
+      if (bannerProgress) bannerProgress.textContent = `step ${stepNum} of ${total}`;
+
+      const prevCount = state.events ? state.events.length : 0;
       if (i > 0) {
         await api("/api/demo/step", { id: demoId, step: i });
         await Promise.all([loadDiary(), loadConfirms(), refreshCapture()]);
       }
-      await new Promise((r) => setTimeout(r, 200));
+
+      // Switch screen focus whenever a step is loaded from the demo
+      focusLatestStep();
+
+      const newCount = state.events ? state.events.length : 0;
+      // Paced replay: 950ms when a new card is emitted, 700ms for internal turn steps
+      const delay = newCount > prevCount ? 950 : 700;
+      await new Promise((r) => setTimeout(r, delay));
     }
 
     if (!replayAborted) {
@@ -775,6 +832,7 @@ $("#start-demos").addEventListener("click", (e) => {
   busy(b, async () => {
     const r = await api("/api/demo", { id: demoId });
     await afterNewStudy();
+    focusLatestStep();
     toast(`Demo loaded: ${r.events} entries.`);
     if (demoId === "alphafold") {
       $("#ask-input").value = "Why did they change approach at step 4?";
@@ -825,6 +883,7 @@ if (quickDemoBtn) {
     busy(quickDemoBtn, async () => {
       const r = await api("/api/demo", { id: "alphafold" });
       await afterNewStudy();
+      focusLatestStep();
       toast(`AlphaFold 2 demo loaded: ${r.events} entries. Auditing step 4 pivot...`);
       $("#ask-input").value = "Why did they change approach at step 4?";
       $("#ask-form").requestSubmit();

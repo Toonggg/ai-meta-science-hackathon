@@ -589,3 +589,41 @@ table.st tr.off td { color: var(--muted); }
   border-radius: 50%;
   box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 40%, transparent);
 }
+
+/* Step Highlight & Focus Switch */
+@keyframes highlight-pulse-anim {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent);
+    transform: scale(1.015);
+  }
+  50% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 25%, transparent);
+    transform: scale(1.02);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    transform: scale(1);
+  }
+}
+
+.highlight-pulse {
+  animation: highlight-pulse-anim 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius);
+  transition: outline .4s ease;
+}
+
+li.ev.highlight-pulse .card {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+#raw-view .card.highlight-pulse,
+.reviewer-card.highlight-pulse,
+.answer.highlight-pulse {
+  border-color: var(--accent) !important;
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel)) !important;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 20%, transparent) !important;
+}
