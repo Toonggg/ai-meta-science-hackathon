@@ -163,7 +163,7 @@ Open **Export and capture** in the sidebar:
 
 The same panel has **New study or demo…**, which reopens the start screen.
 
-## 7. Vet a research question (step 1)
+## 7. Vet a research question (Task 1)
 
 Open **1 Vet question** at the top. Paste one research question, or click an example, and press **Stress-test** (or Enter).
 
@@ -186,7 +186,7 @@ Each finding is tagged **rule**, **search** or **AI**, so you can see where it c
 
 Click **Start diary with this →** next to a sharper question to make it the first step of your diary.
 
-## 8. Check a paper's claims (step 3)
+## 8. Check a paper's claims (Task 3)
 
 Open **3 Check claims**. Paste the paper's text (abstract, results and discussion, as plain text) and click **Build claim map**. With the Hospital readmission demo open, **Load demo paper** fills in a paper that overstates the demo's own results; try to spot where before running it.
 
