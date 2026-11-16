@@ -1,101 +1,275 @@
-# Episteme: MVP
+# Episteme
 
-A browser prototype that combines `claude_research.md` and `gemini_research.md` into one tool for the AI4MetaScience hackathon.
+A flight recorder for AI-assisted research. Episteme captures what a researcher and an AI agent do during a study, turns it into a short diary of decisions, and records who stated each reason. A reviewer who wasn't there can then answer the hackathon brief's test question, *"why did they change approach at step 4?"*, from the log alone, with every answer citing the events behind it.
+
+Built for the AI4MetaScience hackathon (brief: [`AI4MetaScience_Hackathon_Tasks.pdf`](AI4MetaScience_Hackathon_Tasks.pdf)). Task 2, the provenance notebook, is the core. Task 1 (vet a question) and Task 3 (check a paper's claims) are connected to it as one research lifecycle.
 
 ```bash
-./run
+./run          # Python 3.9+, standard library only. Opens http://127.0.0.1:8765
 ```
 
-That's it. The command opens the app in your browser and stops when you press Ctrl+C. It needs only Python 3.9+; there are no installs, no build step and no account. Data stays in `.episteme/` (gitignored).
+No installs, no build step, no account. Everything stays on your machine in `.episteme/`. For a walkthrough of the app, see the [how-to-use guide](HOW_TO_USE.md).
 
-## What it shows
+## Contents
 
-Both research docs recommend **Task 2 (provenance diary)** as the core, and `claude_research.md` suggests connecting all three tasks ("one lifecycle, one diary"). The MVP follows that structure:
+- [Design principles](#design-principles)
+- [Architecture](#architecture)
+- [Capture](#capture)
+- [From raw activity to decisions](#from-raw-activity-to-decisions)
+- [Who stated it: attribution](#who-stated-it-attribution)
+- [Answering "why step 4?"](#answering-why-step-4)
+- [Task 1 and Task 3](#task-1-and-task-3)
+- [Data model and exports](#data-model-and-exports)
+- [Models, search and offline use](#models-search-and-offline-use)
+- [Security and privacy](#security-and-privacy)
+- [Demos](#demos)
+- [Testing](#testing)
+- [Limits and future work](#limits-and-future-work)
+- [API](#api)
+- [Repository layout](#repository-layout)
 
-| Step | Task | What you can try | Ideas used from the research |
-|---|---|---|---|
-| **1. Vet the question** | Task 1 | Paste a question. It runs through three visible stages (**local rules → literature search → AI refinement**) and gives ambiguous terms with how papers actually measure them, implicit assumptions, existing systematic reviews, candidate datasets, a **proceed / narrow / revise / stop** verdict, and a narrowing ladder. Every finding is tagged `rule`, `search` or `AI`. "Start diary with this" sends the result to step 2. | Term-sense mapper, assumption excavator, data-feasibility probe, narrowing ladder (Claude); Epistemic Interrogator, DataFeasibility Radar (Gemini) |
-| **2. Record the work** | Task 2 | Pick a demo on the start screen (hospital readmission or AlphaFold); both change approach at **step 4**. Ask *"Why did they change approach at step 4?"*. Add a plan with `AUROC >= 0.85`, then a run that misses it, then a new plan. | Plan → Run → Surprise → Pivot timeline (both); **hypothesis ledger** that auto-flags contradicted expectations; **pivot micro-prompts** that ask "why?" in the moment; **stated vs inferred** labels; grounded "ask the log"; ⌘⇧E quick-drop thought (Gemini); PROV-JSON and decision-appendix export; HTTP ingest for agents and notebooks |
-| **3. Check the claims** | Task 3 | With the hospital-readmission demo open, load its paper and build the claim map. The paper overstates the diary's own results, and the map catches it. | Clickable claim map, hedging-vs-evidence calibrator, spin check, checked-vs-unverified ledger (Claude); ClaimTrace, CalibreSci (Gemini); claims linked back to the diary runs that produced them |
+## Design principles
 
-The success criterion in the brief, *"a reviewer who wasn't there can answer 'why did they change approach at step 4?'"*, is built into the diary as a feature.
+1. **Capture while the work happens, not afterwards.** Hooks record the agent's instructions, tool calls, results and commits as they occur. Reconstructing reasons later is what the brief says goes wrong.
+2. **Rules propose, the model confirms.** Deterministic rules build the diary instantly. A language model is asked only about the few episodes the rules flag as a possible change of approach, and never on the reviewer's read path.
+3. **A model cannot put words in anyone's mouth.** A reason is labelled as stated only if it is a verbatim quote from the researcher's instruction or the agent's message. A paraphrase is kept separately and labelled as the model's.
+4. **Every claim points at its evidence.** Diary events link to the raw events they came from. Answers cite diary events by ID.
+5. **Works without a model.** Rules, search and the heuristic answerer run offline. A model adds depth but is never required.
+6. **No dependencies.** Python 3.9+ standard library and vanilla JavaScript, so a reviewer can run it in one command and read all of it.
 
-## Three tiers: local → search → AI
+## Architecture
 
-| Tier | What leaves your machine | What it adds |
+```mermaid
+flowchart LR
+  subgraph Capture
+    CC[Claude Code hook] --> S[capture/send.py<br/>redact, spool if offline]
+    GH[git post-commit hook] --> S
+    O[Any script or notebook] -->|POST /api/events| D
+  end
+  S -->|POST /api/raw| R[(raw.jsonl<br/>append-only, R1, R2...)]
+  R --> E[episodes.segment<br/>pure function]
+  E --> ST[Stitcher<br/>background thread]
+  ST -->|rules| D[(diary.json<br/>decisions, E1, E2...)]
+  ST -.->|flagged episodes only| M[LLM: is it a pivot?<br/>quote must be verbatim]
+  M -.-> D
+  D --> L[Hypothesis ledger<br/>surprises, why-prompts]
+  D --> UI[Browser UI<br/>timeline, confirm, ask the log]
+  D --> X[Exports<br/>Markdown, PROV-JSON, JSON]
+  D --> T3[Task 3 claim map<br/>links claims to runs]
+  T1[Task 1 question vetting] -->|start diary with question| D
+```
+
+One local server (`episteme/server.py`, a stdlib `ThreadingHTTPServer` bound to 127.0.0.1) serves the UI and a JSON API. There is one diary at a time.
+
+## Capture
+
+| Source | How | What becomes a raw event |
 |---|---|---|
-| **Local rules** | Nothing | Instant first pass from a lexicon of contested constructs and regexes |
-| **Literature search** (header toggle *Search*, on by default) | Keywords only, never the full question or your diary | Real papers, systematic reviews, datasets; counts of how papers operationalise each term; "already answered?" check |
-| **AI refinement** (header toggle *AI*) | Question + search results, to the model you chose | The model proposes sharper searches, Episteme runs them, then the model writes a critique that may cite **only** retrieved papers (invented ids are dropped) |
+| Claude Code | hook (`capture/claude_hook.py`) | each instruction, each tool call with its command and output tail, failures, the agent's final message per turn |
+| git | `post-commit` hook | hash, message, changed file names, whether the agent or a person committed |
+| Anything else | `POST /api/raw` or `POST /api/events` | raw activity, or ready-made diary events (labelled as coming from a script) |
 
-### Search sources and fallback
+`python3 capture/install.py /path/to/project` installs both hooks in a project (`--remove` undoes it). If Episteme is not running, events wait in `.episteme/spool.jsonl` and are sent in order later. The hook never blocks the agent or fails a tool call.
 
-| Group | Sources | Key |
+Scripts report outcomes as `RESULT` lines, which is how Episteme knows a run produced a result:
+
+```
+RESULT auroc=0.81 seed=42 split=cluster
+```
+
+Numbers become metrics; setup values such as `seed`, `n`, `epochs` or `lr` are kept as context and never compared. Names containing loss, error, rmse and similar are treated as lower-is-better.
+
+Not captured: file contents, diffs, and the agent's intermediate messages within a turn. Details: [`capture/README.md`](capture/README.md).
+
+## From raw activity to decisions
+
+The raw log holds everything; the diary holds only decisions. Two steps connect them.
+
+**1. Episodes** (`episteme/episodes.py`). `segment()` groups raw events into episodes:
+
+- A non-trivial human instruction opens an episode. Acknowledgements ("ok", "continue", "fix that") join the open one.
+- A run with `RESULT` lines, a real error, or a commit closes it. The agent's explanation right after a result stays with that result.
+- A failed command re-run within two actions is a quick fix, not a boundary.
+
+`segment()` is a pure function with bounded look-ahead, so episode IDs never change as new events arrive. Episodes are flagged for `failure`, `metric_drop`, `change_words` and `new_direction`.
+
+**2. Stitching** (`episteme/stitcher.py`). For each finished episode, rules create diary events instantly:
+
+| Event | Created when | Stated by |
 |---|---|---|
-| Papers | Semantic Scholar, OpenAlex, Europe PMC, PubMed, Crossref, arXiv | None needed; optional keys raise rate limits |
-| Datasets | Zenodo, DataCite, Hugging Face | None |
-| Web | Brave, Serper (Google results), Tavily | Your own key (Google's own Custom Search API closes on 1 Jan 2027) |
+| plan | a human instruction opened the episode; an expectation such as `AUROC >= 0.8` is extracted from it | researcher |
+| run | a command printed a `RESULT`, or failed and closed the episode | agent |
+| surprise | a run missed the plan's expectation (hypothesis ledger), or a metric dropped against the previous result | Episteme (inferred) |
+| artifact | a commit | agent or researcher, from the git hook |
+| pivot | the episode was flagged as a possible change of approach | see below |
 
-- **Free sources are queried together** and merged, with duplicates found by several sources combined. If one is down or rate-limited, it drops out and the rest cover for it.
-- **Web engines form a priority chain:** the first healthy one is used, and the next one is tried if it fails.
-- A failing source is **paused** with a growing cooldown (30 s → 15 min). Each source keeps to its documented politeness limit (for example arXiv gets one call per 3 s), and a 429 response gets one retry.
-- A **background poller** re-checks every source every 10 minutes using cheap single-record lookups.
-- **Source status panel:** click "7/9 sources up" in the header, or "status" on the search tier card. For each source it shows status, latency, last check (and whether that was auto, manual or a search), the last 24 checks as bars, uptime %, the cooldown countdown, and the time to the next automatic check. **Check** probes one source immediately (ignoring its cooldown), and **Check all now** probes every free source. Web engines are checked only on request, because each check uses a query from your quota. The API equivalents are `GET /api/sources` and `POST /api/sources/check` with `{"id": "arxiv"}`, or `{}` for all sources.
-- Settings → Search sources is where you switch sources on or off and add keys.
-- Results are cached for an hour. Adding a source means writing one function in `episteme/search.py`.
+A flagged episode first gets a *pending* pivot built by the rules, shown at once. In the background, the model decides whether it is a real change of approach, from what to what, and why, and must quote the reason word for word. The model call runs outside the stitcher's lock, so a slow model never blocks the UI. With no model, the pivot stays pending and the researcher can write the reason in one line.
 
-## AI is optional, and you choose the provider
+## Who stated it: attribution
 
-Without a model, local rules and search still work. Click the model badge in the top-right to connect one:
+Each diary event carries an `actor` and a provenance label, shown as a badge on the timeline:
 
-| Provider | Notes |
+| Badge | Meaning | Trust |
+|---|---|---|
+| researcher | the person's own words (an instruction, a note, a reason they typed or edited) | stated |
+| agent | the agent's own words, quoted verbatim from its message | stated |
+| agent ✓ | an agent-stated reason the researcher confirmed with one click | stated, confirmed |
+| inferred | reconstructed by Episteme's rules or a model paraphrase | lower |
+| pending | flagged by rules, not yet classified or confirmed | lowest |
+
+Attribution is decided by the server, never by the caller: `server.py` strips attribution fields (`actor`, `confirmed_by`, `quote`, `raw_ids` and others) from posted events. Confirming, editing or skipping a reason only works from the Episteme page itself (see [Security and privacy](#security-and-privacy)). The reason the researcher confirms is never overwritten by a later model pass.
+
+## Answering "why step 4?"
+
+`POST /api/ask` answers a reviewer's question from the diary only.
+
+- **With a model:** the diary is sent with each event's "who stated it" field. The model must cite every statement by event ID (`[E4]`), say whose statement it rests on, flag inferred reasons as less reliable, and say plainly when the log has no answer.
+- **Without a model:** a heuristic answerer resolves "step N" or "E7" directly, finds the pivot linked to it and explains it with its trigger and evidence, or falls back to keyword (TF-IDF) ranking over events.
+
+Citations render as chips that jump to the event on the timeline, so the reviewer can check each claim.
+
+## Task 1 and Task 3
+
+**Task 1, vet a question** (`pipeline.py`, `question.py`, `search.py`). A three-stage background job:
+
+1. **Local rules:** a lexicon of contested constructs and assumption patterns. Instant; nothing leaves the machine.
+2. **Literature search:** keywords only, never the full question, go to free scholarly APIs. This finds existing reviews, how papers measure each term, and candidate datasets.
+3. **AI refinement:** the model proposes sharper searches, Episteme runs them, and the model writes a critique that may cite only retrieved papers. Invented IDs are dropped.
+
+Output: ambiguous terms with their senses, implicit assumptions, evidence needed and whether it is obtainable, and a proceed / narrow / revise / stop verdict. Each finding is tagged `rule`, `search` or `AI`. A refined question can start the diary.
+
+**Task 3, claim map** (`claims.py`). For a paper's text:
+
+- Each claim gets its certainty wording (strong, moderate, hedged), its anchors (figures, tables, sections, code files) and whether those anchors exist in the paper.
+- Weak-evidence cues (single seed, small n, no error bars) and scope words ("generalises", "across hospitals") are compared with the claim's wording.
+- The status is one of supported / weak evidence / overclaimed / no evidence, with the reasons.
+- Numbers in a claim are traced back to the diary runs that produced them.
+- An explicit checked vs not-verified ledger comes with every map.
+
+## Data model and exports
+
+State lives in `.episteme/` (gitignored): `diary.json`, `raw.jsonl`, `stitch.json`, `config.json`, `token`, `spool.jsonl`.
+
+A diary event (full shape in the docstring of `episteme/store.py`):
+
+```json
+{
+  "id": "E4", "ts": "2026-11-13T14:05:00+01:00", "type": "pivot",
+  "title": "Switch from a random split to a family split",
+  "detail": "the random split leaks near-identical sequences",
+  "actor": "human", "provenance": "stated", "quote": "the random split leaks near-identical sequences",
+  "model_summary": "Changed the split to avoid leakage between similar proteins",
+  "classified_by": {"model": "GLM-5.3-Flash", "at": "2026-11-13T14:05:09+01:00"},
+  "links": ["E2", "E3"], "raw_ids": ["R7", "R8"], "episode_id": "EP-R7"
+}
+```
+
+Types: `plan` (with `expectation`), `run` (with `result`, `status`, `code`, `params`, `data`), `surprise`, `pivot`, `note`, `artifact`, `question`.
+
+Exports (`GET /api/export?format=`):
+
+- `md`: a decision appendix for a paper or report.
+- `prov`: W3C PROV-JSON. Researcher, agent, Episteme and each classifying model are PROV agents; confirmation and classification are attribution relations.
+- `json`: the raw diary.
+
+## Models, search and offline use
+
+The model layer (`llm.py`) exposes two functions, `text()` and `structured()`. Providers: Anthropic, OpenAI and any OpenAI-compatible server (LM Studio, vLLM, OpenRouter, Berget AI), Gemini, and local Ollama. Configuration order: settings saved in the UI, then `EPISTEME_*` environment variables (`./run` reads `.env`), then provider key variables, then a running Ollama, then no model. The stitcher can use a smaller, faster model than the one answering questions.
+
+Search (`search.py`) queries free sources in parallel and merges the results:
+
+- **Papers:** Semantic Scholar, OpenAlex, Europe PMC, PubMed, Crossref, arXiv.
+- **Datasets:** Zenodo, DataCite, Hugging Face.
+- **Web (your own key):** Brave, Serper and Tavily, tried in order.
+
+Failing sources are paused with a growing cooldown, and a background poller re-checks them every 10 minutes. Results are cached for an hour.
+
+`./run --offline` turns off all network use. The diary, ledger, rules and heuristic answers still work.
+
+## Security and privacy
+
+- The server binds to 127.0.0.1 and checks the `Host` and `Origin` headers, which blocks other web pages and DNS rebinding.
+- State-changing routes (confirm, pivot, delete, demo, clear, settings, sources) need a random token that changes on every start and is embedded only in Episteme's own page.
+- Secrets are stripped from captured text before it is stored or sent (`redact.py`): common key formats, bearer tokens, passwords in URLs, secret-looking `key=value` pairs, and values of environment variables named like KEY, TOKEN, SECRET or PASSWORD. This is pattern-based: a safety net, not a guarantee.
+- API keys entered in the UI are saved only to `.episteme/config.json` with file mode 600.
+- What leaves the machine: search keywords to the search APIs, and, if a model is configured, the relevant text to that provider. Nothing else.
+
+The token stops other web pages and naive scripts. Anything that can read your files can also read `.episteme/token`.
+
+## Demos
+
+The start screen offers two demos. Both are **simulated studies**, not records of real published work:
+
+- **Hospital readmission:** a TF-IDF baseline misses its expected AUROC, and the researcher switches to PubMedBERT embeddings at step 4. It comes with a paper that overstates the results, for Task 3.
+- **AlphaFold:** a reconstructed mid-2020 session in which the AlphaFold 1 pipeline stalls and the team moves to an end-to-end architecture. The background is in [`docs/ALPHAFOLD_HISTORICAL_DISCOVERY_DEMO.md`](docs/ALPHAFOLD_HISTORICAL_DISCOVERY_DEMO.md).
+
+Each demo is a raw capture session (`demo/*.jsonl`, listed in `demo/demos.json`) and loads through the same path as live capture: raw log, episodes, stitcher. Demos therefore exercise the real pipeline and cannot drift from it. `tools/replay.py demo/<id>.jsonl` replays a session into a running Episteme at real-time pace, for watching the diary fill in. To add a demo, add a `.jsonl` file and an entry in `demos.json`.
+
+## Testing
+
+```bash
+python3 -m unittest discover -s tests     # 96 tests, about 7 s, Python 3.9 and 3.13
+```
+
+| File | Tests | Covers |
+|---|---|---|
+| `test_episodes.py` | 27 | segmentation rules, RESULT parsing, flags, store and ledger behaviour |
+| `test_stitcher.py` | 19 | rules to events, verbatim-quote check, pending pivots, model calls outside the lock |
+| `test_capture.py` | 15 | Claude Code and git hooks, redaction, offline spool |
+| `test_confirm.py` | 13 | confirm, edit and skip; reasons never overwritten; attribution in exports |
+| `test_demos.py` | 9 | demo loading through the pipeline; replay and load give the same diary |
+| `test_security.py` | 8 | token, Host and Origin checks; attribution fields stripped from posted events |
+| `test_replay.py` | 5 | session replay tool |
+
+Task 1 search and question vetting, and the Task 3 claim map, have no automated tests yet. They were checked by hand in the browser.
+
+## Limits and future work
+
+- **One agent session per project at a time.** Two parallel Claude Code sessions in one project interleave, and a result can be linked to the wrong instruction.
+- **Agent capture covers Claude Code only.** Other tools can post to `/api/raw`. Decisions made outside the agent, such as in a meeting, need the why-prompt or a manual note.
+- **Long background jobs** (cluster jobs, `nohup`) report results outside the hook and need a manual log entry.
+- **Reasons are only as honest as the record.** Verbatim quotes prove who said something, not that it was the true cause. The expected-versus-observed check in the ledger is the part that does not rely on anyone's account.
+- **The claim map reads plain text only:** no PDF parsing or figure reading. Its claim detection is pattern-based, with optional model help.
+- **Answers from a model cite event IDs, but those citations are not machine-checked yet.** Task 1 already drops invented paper IDs, and the same check should apply here.
+- **Tamper evidence (future):** chain each diary event to the hash of the previous one, and anchor the latest hash externally (for example with OpenTimestamps), so a reviewer can tell whether the log was edited after the fact.
+
+## API
+
+All JSON, on `http://127.0.0.1:8765`. Routes marked † need the page token.
+
+| Route | Purpose |
 |---|---|
-| Anthropic Claude | `ANTHROPIC_API_KEY` or paste a key (default model `claude-opus-5-5`) |
-| OpenAI / compatible | `OPENAI_API_KEY`, **or any OpenAI-compatible server**: LM Studio, llama.cpp, vLLM, OpenRouter (set the base URL) |
-| Google Gemini | `GEMINI_API_KEY` / `GOOGLE_API_KEY` |
-| Local (Ollama) | No key, nothing leaves the machine. Auto-detected if Ollama is running. |
+| `GET /api/events`, `POST /api/events` | read the diary; add an event (attribution fields are stripped) |
+| `POST /api/raw`, `GET /api/raw`, `GET /api/episodes`, `GET /api/stitch` | raw capture in; raw log, episodes and stitcher status out |
+| `GET /api/prompts`, `POST /api/confirm` †, `POST /api/pivot` † | pivots waiting for the researcher; confirm, edit or skip them |
+| `POST /api/ask` | answer a question from the diary |
+| `GET /api/export?format=md\|prov\|json` | exports |
+| `POST /api/question/start`, `GET /api/jobs/<id>` | Task 1 staged job |
+| `POST /api/claims`, `GET /api/demo-paper` | Task 3 claim map; the loaded demo's paper |
+| `GET /api/demos`, `POST /api/demo` †, `POST /api/clear` †, `POST /api/delete` † | demos and diary management |
+| `GET /api/status`, `POST /api/settings` †, `GET /api/sources`, `POST /api/sources` †, `POST /api/sources/check` | model and search configuration and health |
 
-If no provider is configured, `./run` auto-detects one from env vars (Anthropic → OpenAI → Gemini → a running Ollama) and otherwise runs without a model. Keys entered in the UI are saved only to `.episteme/config.json` (mode 600). `./run --offline` switches off all network use (no model, no search). To add a provider, write one function in `episteme/llm.py`.
-
-## Themes and contrast
-
-Use the picker in the top-right to switch between **Tokyo Night** (default), **Dracula**, **Catppuccin Mocha**, **One Dark** and **Catppuccin Latte** (light, for projectors). The palettes use each theme's official colours. `tools/build_themes.py` checks every text/background pair the UI draws against WCAG AA (4.5:1). Where an official colour falls short, the script shifts *lightness only*, keeping hue and saturation, and reports the change. Tokyo Night needs no changes. Dracula's comment grey, for example, goes from 2.4:1 to 4.5:1. To add a theme, add a palette there and run `python3 tools/build_themes.py`, which regenerates `episteme/static/themes.css`.
-
-## Logging from other tools
-
-```bash
-curl -s http://127.0.0.1:8765/api/events -H 'content-type: application/json' \
-  -d '{"type":"run","source":"agent","title":"train v2","result":"AUROC 0.83"}'
-```
-
-Event types: `plan` (with `expectation`), `run` (with `result`, `status`, `code`, `params`, `data`), `surprise`, `pivot`, `note`, `artifact`. A Claude Code hook, a Jupyter cell magic or a browser extension would all send events to this endpoint. That is how the Chrome side-panel version described in both research docs would plug in.
-
-## Start screen and demos
-
-Each time Episteme starts it opens on a start screen: start a **new study notebook** (an empty diary with a project name), **load a demo**, or continue the open study. Click the ◈ logo to come back to it. Starting or loading replaces the open diary, so export it first to keep it.
-
-The demos are simulated studies, not real published work. Each one is a recorded capture session in `demo/`, listed in `demo/demos.json`, and loads through the same path as live capture: raw events go into the raw log, then episodes and the stitcher build the diary. Lines with `"kind": "note"` are researcher notes typed into the diary while the capture runs. A demo can come with a paper for Check claims. To add a demo, add a `.jsonl` session and an entry in `demos.json`. `tools/replay.py demo/<id>.jsonl` plays the same file with real-time pacing.
-
-## Layout
+## Repository layout
 
 ```
-run                    launcher (hides startup; reuses a running instance)
-episteme/server.py     stdlib HTTP server + JSON API (127.0.0.1 only)
-episteme/llm.py        provider-agnostic model layer (Anthropic, OpenAI-compatible, Gemini, Ollama)
-episteme/search.py     12 search sources, health/cooldown, poller, fallback, merging
-episteme/pipeline.py   Task 1 staged job: local rules -> search -> AI refinement
-episteme/question.py   Task 1 rules + prompts
-episteme/diary.py      Task 2: ledger, micro-prompts, ask-the-log
-episteme/claims.py     Task 3
-episteme/demos.py      demo studies (demo/demos.json): one format, loaded like live capture
-episteme/export.py     JSON, W3C PROV-JSON, Markdown decision appendix
-episteme/static/       UI (vanilla HTML/CSS/JS); themes.css is generated
-tools/build_themes.py  theme palettes + WCAG contrast check/adjust
+run                     launcher: loads .env, starts the server, opens the browser
+episteme/server.py      HTTP server and JSON API (127.0.0.1 only)
+episteme/store.py       diary (diary.json) and raw log (raw.jsonl)
+episteme/episodes.py    raw events -> episodes (pure function)
+episteme/stitcher.py    episodes -> diary events; rules propose, the model confirms
+episteme/diary.py       hypothesis ledger, why-prompts, confirm flow, ask the log
+episteme/redact.py      secret stripping
+episteme/llm.py         provider-agnostic model layer
+episteme/pipeline.py    Task 1 staged job; question.py has its rules, search.py the sources
+episteme/claims.py      Task 3 claim map
+episteme/demos.py       demo loading (demo/demos.json)
+episteme/export.py      Markdown, PROV-JSON and JSON exports
+episteme/static/        UI: vanilla HTML, CSS and JavaScript (themes.css is generated)
+capture/                Claude Code and git hooks, sender, installer
+tools/replay.py         replay a recorded session into a running Episteme
+tools/build_themes.py   theme palettes with a WCAG AA contrast check
+demo/                   demo sessions, index and paper
+tests/                  unit tests (unittest, no dependencies)
 ```
 
-## Known limits (deliberate for an MVP)
-
-- The local rules use a small lexicon. Search makes them concrete, but sense counts are keyword matches on abstracts, not a real classification; the AI stage does the real interpretation.
-- Search ranking is by simple keyword coverage; relevance falls off after the first 10–15 results. Hugging Face matches dataset names only.
-- Capture is manual or HTTP-based. The browser extension that watches Colab, chat and GitHub tabs is the next step.
-- The claim map reads plain text and does not parse PDFs or inspect figures. The "Not verified" ledger says so explicitly.
+Planning documents from the hackathon (`claude_research.md`, `gemini_research.md`, `design.md`, `bugs.md`) are kept for reference and are not part of the tool.
