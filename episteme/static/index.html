@@ -22,23 +22,27 @@
     <span class="arrow">→</span>
     <button data-tab="claims"><span class="num">3</span> Check claims</button>
   </nav>
-  <div class="ai">
-    <label class="toggle" title="Search free scholarly APIs. Sends keywords only, never your diary.">
-      <input type="checkbox" id="use-search"> <span>Search</span>
-    </label>
-    <button id="src-badge" class="badge" title="Search sources and their live status">…</button>
-    <label class="toggle" title="Let the connected model refine searches and write a grounded critique.">
-      <input type="checkbox" id="use-ai"> <span>AI</span>
-    </label>
-    <button id="ai-badge" class="badge" title="Choose a model provider">…</button>
-    <select id="theme" class="theme-pick pill-select" title="Colour theme (all checked for WCAG AA contrast)" aria-label="Colour theme">
-      <option value="tokyo-night">Tokyo Night</option>
-      <option value="dracula">Dracula</option>
-      <option value="catppuccin-mocha">Catppuccin Mocha</option>
-      <option value="one-dark">One Dark</option>
-      <option value="catppuccin-latte">Latte (light)</option>
-    </select>
-  </div>
+  <details class="ai hdr-menu" id="hdr-menu">
+    <summary class="badge" id="hdr-sum" title="Model, search and theme">…</summary>
+    <div class="menu">
+      <label class="toggle" title="Search free scholarly APIs. Sends keywords only, never your diary.">
+        <input type="checkbox" id="use-search"> <span>Literature search</span>
+      </label>
+      <button id="src-badge" class="badge" title="Search sources and their live status">…</button>
+      <label class="toggle" title="Let the connected model refine searches and write a grounded critique.">
+        <input type="checkbox" id="use-ai"> <span>AI model</span>
+      </label>
+      <button id="ai-badge" class="badge" title="Choose a model provider">…</button>
+      <span class="toggle">Theme</span>
+      <select id="theme" class="theme-pick pill-select" title="Colour theme (all checked for WCAG AA contrast)" aria-label="Colour theme">
+        <option value="tokyo-night">Tokyo Night</option>
+        <option value="dracula">Dracula</option>
+        <option value="catppuccin-mocha">Catppuccin Mocha</option>
+        <option value="one-dark">One Dark</option>
+        <option value="catppuccin-latte">Latte (light)</option>
+      </select>
+    </div>
+  </details>
 </header>
 
 <main>
@@ -67,7 +71,7 @@
       <div class="col-main">
         <div class="intro">
           <h2 id="project-name">Research diary</h2>
-          <p>Plans, runs, surprises and pivots, with the <i>why</i>. Each entry shows who stated it: the researcher, the AI agent, or Episteme's own inference (reconstructed, lower trust).</p>
+          <p>Plans, runs, surprises and pivots, with the <i>why</i>. The badge on each entry says who stated it: the researcher, the agent, or Episteme's own inference (lower trust).</p>
         </div>
         <form id="add-form" class="card add">
           <div class="row">
@@ -115,8 +119,8 @@
           <div class="examples" id="ask-examples"></div>
           <div id="ask-out"></div>
         </div>
-        <div class="card">
-          <h3>Export</h3>
+        <details class="card tools">
+          <summary>Export and capture</summary>
           <div class="btns">
             <a class="btn" href="/api/export?format=md">Decision appendix (.md)</a>
             <a class="btn" href="/api/export?format=prov">W3C PROV-JSON</a>
@@ -129,7 +133,7 @@
             <button id="reset-demo" class="ghost">Reload demo session</button>
             <button id="clear-diary" class="ghost danger">Start empty diary</button>
           </div>
-        </div>
+        </details>
       </aside>
     </div>
   </section>

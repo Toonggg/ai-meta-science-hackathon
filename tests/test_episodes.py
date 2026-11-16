@@ -224,6 +224,16 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(d.add({"type": "plan", "title": "x", "source": "agent", "actor": "human"})["actor"], "human")
         self.assertNotIn("actor", d.add({"type": "note", "title": "x", "source": "colab"}))
 
+    def test_ledger_surprise_takes_the_run_time(self):
+        import diary
+        d = Diary(os.path.join(self.dir, "diary.json"))
+        d.clear()
+        d.add({"type": "plan", "title": "baseline", "expectation": "AUROC >= 0.8", "ts": "2020-08-10T09:00:00+00:00"})
+        run = d.add({"type": "run", "title": "train", "result": "AUROC 0.61", "ts": "2020-08-10T10:00:00+00:00"})
+        auto, _ = diary.after_add(d, run)
+        self.assertEqual([a["type"] for a in auto], ["surprise"])
+        self.assertEqual(auto[0]["ts"], "2020-08-10T10:00:00+00:00")
+
 
 if __name__ == "__main__":
     unittest.main()
