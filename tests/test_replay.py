@@ -38,7 +38,7 @@ class ReplayTest(unittest.TestCase):
         server.STITCHER = None
 
     def test_replay_instant_with_project(self):
-        server.STORE.reset_demo()
+        server.load_demo("alphafold")  # --clear replaces whatever study was open
         replay.main([self.file, "--url", self.url, "--instant", "--clear", "--project", "Thermostability", "--token", server.TOKEN])
         snap = server.STORE.snapshot()
         self.assertEqual(snap["project"], "Thermostability")
@@ -63,7 +63,7 @@ class ReplayTest(unittest.TestCase):
             replay.load(bad)
 
     def test_clear_without_project_keeps_name(self):
-        server.STORE.reset_demo()
+        server.load_demo("alphafold")
         name = server.STORE.snapshot()["project"]
         server.STORE.clear()
         self.assertEqual(server.STORE.snapshot()["project"], name)

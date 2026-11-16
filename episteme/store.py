@@ -30,8 +30,6 @@ import re
 import threading
 from datetime import datetime, timezone
 
-from demo_data import demo_events
-
 VALID_TYPES = {"plan", "run", "surprise", "pivot", "note", "artifact", "question"}
 VALID_ACTORS = {"human", "agent", "system"}
 ACTOR_FOR_SOURCE = {"manual": "human", "episteme": "system", "agent": "agent"}
@@ -47,8 +45,7 @@ class Diary:
         self.path = path
         self.lock = threading.Lock()
         if not os.path.exists(path):
-            self._write({"project": "Readmission prediction from clinical notes", "next_id": 1, "events": []})
-            self.reset_demo()
+            self._write({"project": "", "demo": None, "next_id": 1, "events": []})
 
     # -- low level -------------------------------------------------------
     def _read(self):
@@ -124,24 +121,15 @@ class Diary:
             data["events"] = [e for e in data["events"] if e["id"] != event_id]
             self._write(data)
 
-    def clear(self, project=None):
+    def clear(self, project=None, demo=None):
+        """Empty the diary. `demo` records which demo (demos.py) it is about to hold, if any."""
         with self.lock:
             data = self._read()
             data["events"] = []
             data["next_id"] = 1
+            data["demo"] = demo
             if project and project.strip():
                 data["project"] = project.strip()[:120]
-            self._write(data)
-
-    def reset_demo(self):
-        events = demo_events()
-        for e in events:  # the demo was logged by hand: everything is the researcher's except Episteme's own flags
-            e.setdefault("actor", "system" if e.get("source") == "episteme" else "human")
-        with self.lock:
-            data = self._read()
-            data["project"] = "Readmission prediction from clinical notes"
-            data["events"] = events
-            data["next_id"] = len(events) + 1
             self._write(data)
 
 

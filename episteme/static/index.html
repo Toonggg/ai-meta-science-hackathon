@@ -11,10 +11,10 @@
 </head>
 <body>
 <header>
-  <div class="brand">
+  <button type="button" class="brand" id="open-start" title="Start screen: new study or demo">
     <span class="logo">◈</span>
-    <div><strong>Episteme</strong><small>a flight recorder for AI-assisted research</small></div>
-  </div>
+    <span><strong>Episteme</strong><small>a flight recorder for AI-assisted research</small></span>
+  </button>
   <nav id="tabs">
     <button data-tab="question"><span class="num">1</span> Vet question</button>
     <span class="arrow">→</span>
@@ -22,24 +22,54 @@
     <span class="arrow">→</span>
     <button data-tab="claims"><span class="num">3</span> Check claims</button>
   </nav>
-  <div class="ai">
-    <label class="toggle" title="Search free scholarly APIs. Sends keywords only, never your diary.">
-      <input type="checkbox" id="use-search"> <span>Search</span>
-    </label>
-    <button id="src-badge" class="badge" title="Search sources and their live status">…</button>
-    <label class="toggle" title="Let the connected model refine searches and write a grounded critique.">
-      <input type="checkbox" id="use-ai"> <span>AI</span>
-    </label>
-    <button id="ai-badge" class="badge" title="Choose a model provider">…</button>
-    <select id="theme" class="theme-pick pill-select" title="Colour theme (all checked for WCAG AA contrast)" aria-label="Colour theme">
-      <option value="tokyo-night">Tokyo Night</option>
-      <option value="dracula">Dracula</option>
-      <option value="catppuccin-mocha">Catppuccin Mocha</option>
-      <option value="one-dark">One Dark</option>
-      <option value="catppuccin-latte">Latte (light)</option>
-    </select>
-  </div>
+  <details class="ai hdr-menu" id="hdr-menu">
+    <summary class="badge" id="hdr-sum" title="Model, search and theme">…</summary>
+    <div class="menu">
+      <label class="toggle" title="Search free scholarly APIs. Sends keywords only, never your diary.">
+        <input type="checkbox" id="use-search"> <span>Literature search</span>
+      </label>
+      <button id="src-badge" class="badge" title="Search sources and their live status">…</button>
+      <label class="toggle" title="Let the connected model refine searches and write a grounded critique.">
+        <input type="checkbox" id="use-ai"> <span>AI model</span>
+      </label>
+      <button id="ai-badge" class="badge" title="Choose a model provider">…</button>
+      <span class="toggle">Theme</span>
+      <select id="theme" class="theme-pick pill-select" title="Colour theme (all checked for WCAG AA contrast)" aria-label="Colour theme">
+        <option value="tokyo-night">Tokyo Night</option>
+        <option value="dracula">Dracula</option>
+        <option value="catppuccin-mocha">Catppuccin Mocha</option>
+        <option value="one-dark">One Dark</option>
+        <option value="catppuccin-latte">Latte (light)</option>
+      </select>
+    </div>
+  </details>
 </header>
+
+<section id="start" hidden aria-labelledby="start-title">
+  <div class="start-inner">
+    <div class="start-head">
+      <span class="logo">◈</span>
+      <h1 id="start-title">Episteme</h1>
+      <p class="muted">A flight recorder for AI-assisted research. Start a study notebook, or explore a demo.</p>
+    </div>
+    <button type="button" id="start-continue" class="card start-continue" hidden></button>
+    <div class="start-grid">
+      <form id="start-new" class="card start-card">
+        <h2>New study notebook</h2>
+        <p class="muted">An empty diary for your own project. Log entries by hand, or connect Claude Code and git with <code>capture/install.py</code>.</p>
+        <label for="start-project" class="small muted">Project name</label>
+        <input id="start-project" placeholder="e.g. Thermostability of designed enzymes" autocomplete="off" required>
+        <button class="primary" type="submit">Start notebook</button>
+      </form>
+      <div class="card start-card">
+        <h2>Load a demo</h2>
+        <p class="muted">A simulated study captured as a real session would be, with a change of approach at step 4. Ask the log why.</p>
+        <div id="start-demos" class="start-demos"></div>
+      </div>
+    </div>
+    <p class="muted small start-warn" id="start-warn" hidden></p>
+  </div>
+</section>
 
 <main>
   <!-- TASK 1 -->
@@ -54,7 +84,7 @@
       <li data-tier="ai"><b>3 · AI refinement</b><span>The model plans sharper searches, then critiques citing only papers found.</span></li>
     </ol>
     <div class="row">
-      <textarea id="q-input" rows="2" placeholder="e.g. How does social media engagement impact adolescent wellbeing?"></textarea>
+      <textarea id="q-input" rows="2" placeholder="e.g. How does social media engagement impact adolescent wellbeing? (Enter to stress-test, Shift+Enter for newline)"></textarea>
       <button id="q-run" class="primary">Stress-test</button>
     </div>
     <div class="examples" id="q-examples"></div>
@@ -67,7 +97,7 @@
       <div class="col-main">
         <div class="intro">
           <h2 id="project-name">Research diary</h2>
-          <p>Plans, runs, surprises and pivots, with the <i>why</i>. Each entry shows who stated it: the researcher, the AI agent, or Episteme's own inference (reconstructed, lower trust).</p>
+          <p>Plans, runs, surprises and pivots, with the <i>why</i>. The badge on each entry says who stated it: the researcher, the agent, or Episteme's own inference (lower trust).</p>
         </div>
         <form id="add-form" class="card add">
           <div class="row">
@@ -115,8 +145,8 @@
           <div class="examples" id="ask-examples"></div>
           <div id="ask-out"></div>
         </div>
-        <div class="card">
-          <h3>Export</h3>
+        <details class="card tools">
+          <summary>Export and capture</summary>
           <div class="btns">
             <a class="btn" href="/api/export?format=md">Decision appendix (.md)</a>
             <a class="btn" href="/api/export?format=prov">W3C PROV-JSON</a>
@@ -126,10 +156,9 @@
           <p class="muted">Claude Code and git: <code>python3 capture/install.py &lt;project&gt;</code>. Any other script, notebook or agent can log events:</p>
           <pre class="snippet" id="curl-snippet"></pre>
           <div class="btns">
-            <button id="reset-demo" class="ghost">Reload demo session</button>
-            <button id="clear-diary" class="ghost danger">Start empty diary</button>
+            <button id="new-study" class="ghost">New study or demo…</button>
           </div>
-        </div>
+        </details>
       </aside>
     </div>
   </section>
@@ -142,7 +171,7 @@
     </div>
     <div class="row">
       <button id="c-demo" class="ghost">Load demo paper</button>
-      <span class="muted">The demo paper overstates the diary's own results. Can you spot where before running it?</span>
+      <span class="muted" id="c-demo-hint">The hospital-readmission demo comes with a paper that overstates its results. Can you spot where before running it?</span>
     </div>
     <textarea id="c-input" rows="10" placeholder="Paste abstract + results + discussion (plain text)…"></textarea>
     <div class="row"><button id="c-run" class="primary">Build claim map</button></div>

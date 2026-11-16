@@ -129,10 +129,10 @@ if until_year:
     system_prompt += f"\nCRITICAL CONSTRAINT: You are an expert scientific evaluator in {until_year}. Do not cite, reference, or assume any discoveries, architectures, or models published after {until_year}."
 ```
 
-### Step 3: Create Replayable Session File `demo/alphafold_session.jsonl`
+### Step 3: Create Replayable Session File `demo/alphafold.jsonl`
 Assemble the raw capture session containing the commands, tool outputs, and commits. Replay it live in 10 seconds:
 ```bash
-python3 tools/replay.py demo/alphafold_session.jsonl --clear --project "AlphaFold Discovery (CASP14)" --speed 15
+python3 tools/replay.py demo/alphafold.jsonl --clear --project "AlphaFold Discovery (CASP14)" --speed 15
 ```
 
 ### Step 4: Test and Verify with Berget AI Key
