@@ -150,6 +150,18 @@ class Stitcher:
             self.state = {"episodes": {}, "runs": {}}
             self._save()
 
+    def switch(self, state_dir, also=None):
+        """Open another study: `also` points the diary and raw log at it, under the same lock,
+        then this loads that study's stitch state. A model answer for the old study arrives in an
+        older generation and is dropped."""
+        with self.lock:
+            if also:
+                also()
+            self.generation += 1
+            self.path = os.path.join(state_dir, "stitch.json")
+            self.state = self._load()
+        self.poke()
+
     def status(self):
         with self.lock:
             eps = list(self.state["episodes"].values())

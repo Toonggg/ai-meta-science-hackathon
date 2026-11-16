@@ -42,10 +42,15 @@ def now_iso():
 
 class Diary:
     def __init__(self, path):
-        self.path = path
         self.lock = threading.Lock()
-        if not os.path.exists(path):
-            self._write({"project": "", "demo": None, "next_id": 1, "events": []})
+        self.open(path)
+
+    def open(self, path):
+        """Point at another diary file (switching studies), creating it if it is new."""
+        with self.lock:
+            self.path = path
+            if not os.path.exists(path):
+                self._write({"project": "", "demo": None, "next_id": 1, "events": []})
 
     # -- low level -------------------------------------------------------
     def _read(self):
@@ -141,9 +146,14 @@ class RawLog:
     """
 
     def __init__(self, path):
-        self.path = path
         self.lock = threading.Lock()
-        self._next = self._count() + 1
+        self.open(path)
+
+    def open(self, path):
+        """Point at another raw log (switching studies)."""
+        with self.lock:
+            self.path = path
+            self._next = self._count() + 1
 
     def _count(self):
         if not os.path.exists(self.path):

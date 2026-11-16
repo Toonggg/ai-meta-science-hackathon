@@ -30,12 +30,14 @@ import pipeline  # noqa: E402
 import question  # noqa: E402
 import search  # noqa: E402
 import stitcher  # noqa: E402
+import studies  # noqa: E402
 from store import RAW_KINDS, Diary, RawLog  # noqa: E402
 
 STATIC = os.path.join(HERE, "static")
 STORE = None
 RAW = None
 STITCHER = None
+STUDIES = None  # studies.Studies; None in tests that wire a single diary by hand
 MAX_RAW_BATCH = 500
 MAX_BODY = 5 * 1024 * 1024
 
@@ -44,7 +46,8 @@ MAX_BODY = 5 * 1024 * 1024
 # tools (tools/replay.py). It stops other web pages and naive scripts; anything that can read the
 # user's files can read it too.
 TOKEN = secrets.token_urlsafe(24)
-NEEDS_TOKEN = {"/api/confirm", "/api/pivot", "/api/delete", "/api/demo", "/api/clear", "/api/settings", "/api/sources"}
+NEEDS_TOKEN = {"/api/confirm", "/api/pivot", "/api/delete", "/api/demo", "/api/clear", "/api/settings", "/api/sources",
+               "/api/studies/new", "/api/studies/open", "/api/studies/delete"}
 # Attribution is decided by Episteme (stitcher, confirm flow), never taken from a posted event.
 ATTRIBUTION_FIELDS = ("actor", "confirmation", "confirmed_by", "confirmed_at", "skipped_at", "classified_by",
                       "needs_confirmation", "quote", "model_summary", "proposed_reason", "pending", "episode_id",
@@ -83,6 +86,57 @@ def load_demo(demo_id):
                 diary.after_add(STORE, ev)
     if STITCHER:
         STITCHER.poke()
+
+
+def open_study(sid):
+    """Point the diary, raw log and stitcher at another saved study, and remember it as open."""
+    path = STUDIES.path(sid)
+    if not STUDIES.exists(sid):
+        raise KeyError(sid)
+
+    def swap():
+        STORE.open(os.path.join(path, "diary.json"))
+        RAW.open(os.path.join(path, "raw.jsonl"))
+    if STITCHER:
+        STITCHER.switch(path, also=swap)
+    else:
+        swap()
+    STUDIES.set_current(sid)
+
+
+def new_study(project="", demo=None):
+    """Open a new, empty study. The open one is kept, unless it is blank (an unnamed notebook
+    with nothing in it), which is reused instead of leaving empty folders behind."""
+    cur = STUDIES.current()
+    if cur and STUDIES.is_blank(cur):
+        wipe(lambda: STORE.clear(project, demo=demo))
+        return cur
+    sid = STUDIES.create(project, demo)
+    open_study(sid)
+    return sid
+
+
+def open_demo(demo_id):
+    """Open the saved copy of a demo, or load it into a new study the first time. Without a
+    study registry (tests that wire one diary by hand) it replaces the open diary."""
+    demos.get(demo_id)  # unknown id: KeyError before anything changes
+    if not STUDIES:
+        return load_demo(demo_id)
+    sid = STUDIES.find_demo(demo_id)
+    if sid:
+        return open_study(sid)
+    new_study(demos.get(demo_id)["project"], demo=demo_id)
+    load_demo(demo_id)
+
+
+def open_state(state_dir, use_ai=True):
+    """Saved studies under state_dir, with the open one (or a new empty one) loaded."""
+    global STORE, RAW, STITCHER, STUDIES
+    STUDIES = studies.Studies(state_dir)  # also moves a diary from before saved studies into one
+    study = STUDIES.path(STUDIES.ensure_current())
+    STORE = Diary(os.path.join(study, "diary.json"))
+    RAW = RawLog(os.path.join(study, "raw.jsonl"))
+    STITCHER = stitcher.Stitcher(STORE, RAW, study, use_ai=use_ai)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -162,7 +216,13 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/api/prompts":  # pivots waiting for the researcher's confirm / edit / skip
             return self.send(200, {"prompts": diary.prompts(STORE.snapshot()["events"])})
         if p == "/api/demos":
-            return self.send(200, {"demos": demos.list_demos(), "current": STORE.snapshot().get("demo")})
+            saved = {i["demo"] for i in STUDIES.list()} if STUDIES else set()
+            return self.send(200, {"demos": [dict(d, saved=d["id"] in saved) for d in demos.list_demos()],
+                                   "current": STORE.snapshot().get("demo")})
+        if p == "/api/studies":  # saved studies, most recent first, and which one is open
+            if not STUDIES:
+                return self.send(200, {"studies": [], "current": None})
+            return self.send(200, {"studies": STUDIES.list(), "current": STUDIES.current()})
         if p == "/api/demo-paper":  # the paper of the demo that is loaded, if it has one
             demo_id = STORE.snapshot().get("demo")
             text = demos.paper(demo_id) if demo_id else ""
@@ -234,13 +294,29 @@ class Handler(BaseHTTPRequestHandler):
             if p == "/api/delete":
                 STORE.delete(b["id"])
                 return self.send(200, {"ok": True})
-            if p == "/api/demo":  # {"id": "alphafold"}: replace the diary with a demo study
+            if p == "/api/demo":  # {"id": "alphafold"}: open the demo's saved study, or load it into a new one
                 try:
-                    load_demo(b["id"])
+                    open_demo(b["id"])
                 except ValueError as e:
                     return self.send(400, {"error": str(e)})
                 return self.send(200, {"ok": True, "events": len(STORE.events())})
-            if p == "/api/clear":  # fresh project: empty diary and raw log, optionally {"project": "name"}
+            if p.startswith("/api/studies/") and not STUDIES:
+                return self.send(400, {"error": "saved studies are not enabled"})
+            if p == "/api/studies/new":  # {"project": "name"}: a new notebook; the open one is kept
+                project = (b.get("project") or "").strip()
+                if not project:
+                    return self.send(400, {"error": "a new study needs a project name"})
+                return self.send(200, {"id": new_study(project)})
+            if p == "/api/studies/open":  # {"id": "..."}
+                open_study(b["id"])
+                return self.send(200, {"id": b["id"], "events": len(STORE.events())})
+            if p == "/api/studies/delete":  # {"id": "..."}: never the open one
+                try:
+                    STUDIES.delete(b["id"])
+                except ValueError as e:
+                    return self.send(400, {"error": str(e)})
+                return self.send(200, {"ok": True})
+            if p == "/api/clear":  # empty the open study in place: empty diary and raw log, optionally {"project": "name"}
                 wipe(lambda: STORE.clear(b.get("project")))
                 return self.send(200, {"ok": True})
             if p == "/api/stitch":  # run the stitcher now instead of waiting for the next tick
@@ -284,17 +360,14 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global STORE, RAW, STITCHER
     ap = argparse.ArgumentParser()
     ap.add_argument("--state", default=os.path.join(os.path.dirname(HERE), ".episteme"))
     ap.add_argument("--port", type=int, default=8765)
     a = ap.parse_args()
     os.makedirs(a.state, exist_ok=True)
-    STORE = Diary(os.path.join(a.state, "diary.json"))
-    RAW = RawLog(os.path.join(a.state, "raw.jsonl"))
     llm.init(a.state)  # also initialises the shared config file; before the stitcher, which needs it
     # EPISTEME_STITCH_AI=0 keeps the stitcher on rules only (no model calls, no API spend).
-    STITCHER = stitcher.Stitcher(STORE, RAW, a.state, use_ai=os.environ.get("EPISTEME_STITCH_AI", "1") != "0")
+    open_state(a.state, use_ai=os.environ.get("EPISTEME_STITCH_AI", "1") != "0")
     STITCHER.start()
     search.start_poller()
 
