@@ -328,4 +328,5 @@ table.st tr.off td { color: var(--muted); }
 .start-demo .muted { font-size: 13px; }
 .start-continue { text-align: left; cursor: pointer; font: inherit; color: var(--ink); width: 100%; }
 .start-continue small { display: block; color: var(--muted); }
+.start-continue[hidden] { display: none; } /* the button rule's display would otherwise beat [hidden]: empty bar on a fresh diary */
 .start-warn { text-align: center; margin: 0; }
