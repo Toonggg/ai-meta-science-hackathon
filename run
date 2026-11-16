@@ -4,7 +4,7 @@
 #   ./run --offline     no network at all: no model, no search (local rules only)
 #   ./run --no-open     don't open a browser tab
 #   ./run --port 9000   preferred port (falls back to the next free one)
-#   ./run --reset       reload the demo session before starting
+#   ./run --reset       start from an empty diary (the start screen offers the demos)
 #
 # Needs only Python 3.9+ (stdlib). No installs, no build step.
 set -euo pipefail
@@ -28,7 +28,7 @@ while [ $# -gt 0 ]; do
     --offline) export EPISTEME_OFFLINE=1 ;;
     --no-open) OPEN=0 ;;
     --port) PORT="${2:?--port needs a number}"; shift ;;
-    --reset) rm -f "$STATE/diary.json" ;;
+    --reset) rm -f "$STATE/diary.json" "$STATE/raw.jsonl" "$STATE/stitch.json" ;;
     -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $1 (try ./run --help)"; exit 1 ;;
   esac

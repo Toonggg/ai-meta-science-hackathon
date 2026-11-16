@@ -9,6 +9,14 @@ running the agent live:
     python3 tools/replay.py demo/session.jsonl --speed 20     # 20x faster than real time
     python3 tools/replay.py demo/session.jsonl --instant      # everything at once
 
+The demo studies in demo/ use the same format (the start screen loads them in one go);
+replay one to watch its timeline fill in:
+
+    python3 tools/replay.py demo/alphafold.jsonl --clear --project "AlphaFold 2" --speed 15
+
+Lines with "kind": "note" are researcher notes (see episteme/demos.py). They are added
+to the diary once everything before them is stitched, as if typed in at that moment.
+
 Events keep their original timestamps, so the diary shows when things really
 happened. Gaps between events are replayed scaled by --speed and capped at
 --max-gap seconds, so the timeline fills in on screen like a live run.
@@ -24,7 +32,7 @@ import time
 import urllib.request
 from datetime import datetime
 
-KINDS = {"instruction", "action", "agent_text", "commit", "stop"}
+KINDS = {"instruction", "action", "agent_text", "commit", "stop", "note"}
 
 
 def load(path):
@@ -48,13 +56,44 @@ def load(path):
 TOKEN = ""  # set from --token / --token-file; needed only for --clear
 
 
-def post(url, path, body, timeout=30):
+def post(url, path, body=None, timeout=30):
+    """POST body as JSON, or GET when body is None."""
     headers = {"content-type": "application/json"}
     if TOKEN:
         headers["x-episteme-token"] = TOKEN
-    req = urllib.request.Request(url + path, data=json.dumps(body).encode(), headers=headers)
+    data = None if body is None else json.dumps(body).encode()
+    req = urllib.request.Request(url + path, data=data, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode())
+
+
+def add_note(url, line):
+    """A researcher note: stitch what came before it, then add it to the diary (linked to the
+    latest run when it says "about": "last_run"), as episteme/demos.py does."""
+    post(url, "/api/stitch", {}, timeout=600)
+    ev = {"type": "note", "source": "manual", "title": line.get("title", ""), "detail": line.get("detail", "")}
+    if line.get("ts"):
+        ev["ts"] = line["ts"]
+    if line.get("about") == "last_run":
+        runs = [e for e in post(url, "/api/events")["events"] if e.get("type") == "run"]
+        if runs:
+            ev["links"] = [runs[-1]["id"]]
+    post(url, "/api/events", ev)
+
+
+def send(url, batch):
+    """Raw events go to the raw log in one request; notes one at a time, in order."""
+    raw = []
+    for ev in batch:
+        if ev["kind"] == "note":
+            if raw:
+                post(url, "/api/raw", {"events": raw})
+                raw = []
+            add_note(url, ev)
+        else:
+            raw.append(ev)
+    if raw:
+        post(url, "/api/raw", {"events": raw})
 
 
 def ts(ev):
@@ -91,23 +130,25 @@ def main(argv=None):
     url = a.url.rstrip("/")
     global TOKEN
     TOKEN = a.token or ""
-    if not TOKEN and a.clear:
+    if not TOKEN:  # needed for --clear; without it, notes are labelled as coming from a script
         try:
             with open(a.token_file, encoding="utf-8") as f:
                 TOKEN = f.read().strip()
         except OSError:
-            sys.exit("--clear needs Episteme's token: start Episteme first, or pass --token / --token-file")
+            if a.clear:
+                sys.exit("--clear needs Episteme's token: start Episteme first, or pass --token / --token-file")
 
     events = load(a.file)
     if a.clear:
         post(url, "/api/clear", {"project": a.project} if a.project else {})
     if a.instant:
-        post(url, "/api/raw", {"events": events})
+        send(url, events)
     else:
         for ev, wait in zip(events, gaps(events, max(a.speed, 0.01), a.max_gap)):
             time.sleep(wait)
-            post(url, "/api/raw", {"events": [ev]})
-            print("%-11s %s" % (ev["kind"], (ev.get("command") or ev.get("text") or "")[:70].replace("\n", " ")))
+            send(url, [ev])
+            text = ev.get("command") or ev.get("text") or ev.get("title") or ""
+            print("%-11s %s" % (ev["kind"], text[:70].replace("\n", " ")))
     status = post(url, "/api/stitch", {}, timeout=600)  # stitch now; a model call can take minutes
     print("replayed %d events: %d episodes stitched, %d pivots pending" % (len(events), status["stitched"], status["pending"]))
     return 0

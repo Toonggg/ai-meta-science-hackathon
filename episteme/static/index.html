@@ -11,10 +11,10 @@
 </head>
 <body>
 <header>
-  <div class="brand">
+  <button type="button" class="brand" id="open-start" title="Start screen: new study or demo">
     <span class="logo">◈</span>
-    <div><strong>Episteme</strong><small>a flight recorder for AI-assisted research</small></div>
-  </div>
+    <span><strong>Episteme</strong><small>a flight recorder for AI-assisted research</small></span>
+  </button>
   <nav id="tabs">
     <button data-tab="question"><span class="num">1</span> Vet question</button>
     <span class="arrow">→</span>
@@ -44,6 +44,32 @@
     </div>
   </details>
 </header>
+
+<section id="start" hidden aria-labelledby="start-title">
+  <div class="start-inner">
+    <div class="start-head">
+      <span class="logo">◈</span>
+      <h1 id="start-title">Episteme</h1>
+      <p class="muted">A flight recorder for AI-assisted research. Start a study notebook, or explore a demo.</p>
+    </div>
+    <button type="button" id="start-continue" class="card start-continue" hidden></button>
+    <div class="start-grid">
+      <form id="start-new" class="card start-card">
+        <h2>New study notebook</h2>
+        <p class="muted">An empty diary for your own project. Log entries by hand, or connect Claude Code and git with <code>capture/install.py</code>.</p>
+        <label for="start-project" class="small muted">Project name</label>
+        <input id="start-project" placeholder="e.g. Thermostability of designed enzymes" autocomplete="off" required>
+        <button class="primary" type="submit">Start notebook</button>
+      </form>
+      <div class="card start-card">
+        <h2>Load a demo</h2>
+        <p class="muted">A simulated study captured as a real session would be, with a change of approach at step 4. Ask the log why.</p>
+        <div id="start-demos" class="start-demos"></div>
+      </div>
+    </div>
+    <p class="muted small start-warn" id="start-warn" hidden></p>
+  </div>
+</section>
 
 <main>
   <!-- TASK 1 -->
@@ -130,8 +156,7 @@
           <p class="muted">Claude Code and git: <code>python3 capture/install.py &lt;project&gt;</code>. Any other script, notebook or agent can log events:</p>
           <pre class="snippet" id="curl-snippet"></pre>
           <div class="btns">
-            <button id="reset-demo" class="ghost">Reload demo session</button>
-            <button id="clear-diary" class="ghost danger">Start empty diary</button>
+            <button id="new-study" class="ghost">New study or demo…</button>
           </div>
         </details>
       </aside>
@@ -146,7 +171,7 @@
     </div>
     <div class="row">
       <button id="c-demo" class="ghost">Load demo paper</button>
-      <span class="muted">The demo paper overstates the diary's own results. Can you spot where before running it?</span>
+      <span class="muted" id="c-demo-hint">The hospital-readmission demo comes with a paper that overstates its results. Can you spot where before running it?</span>
     </div>
     <textarea id="c-input" rows="10" placeholder="Paste abstract + results + discussion (plain text)…"></textarea>
     <div class="row"><button id="c-run" class="primary">Build claim map</button></div>

@@ -189,10 +189,11 @@ class Stitcher:
         return self.use_ai and llm.available() and (ignore_retry or time.time() >= self.retry_at)
 
     # -- one pass ---------------------------------------------------------------
-    def run_once(self):
+    def run_once(self, ask_model=True):
         """Phase 1 (locked): rules for every new final episode; flagged ones get a pending pivot.
         Phase 2 (no lock): ask the model about pending pivots, so a slow model call never blocks
-        Confirm, Clear or status. Phase 3 (locked): apply each answer if it is still wanted."""
+        Confirm, Clear or status. Phase 3 (locked): apply each answer if it is still wanted.
+        ask_model=False runs phase 1 only (loading a demo: the background loop asks the model later)."""
         todo = []
         with self.lock:
             gen = self.generation
@@ -214,7 +215,7 @@ class Stitcher:
                         self._save()
                         continue
                     self._save()  # after every episode, so a crash never re-stitches (duplicates) it
-                if st.get("status") == "pending" and ep["id"] not in self.inflight and self._ai_ready():
+                if ask_model and st.get("status") == "pending" and ep["id"] not in self.inflight and self._ai_ready():
                     self.inflight.add(ep["id"])
                     todo.append((ep, prev))
             self.last_run = now_iso()
