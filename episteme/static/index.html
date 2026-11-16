@@ -15,7 +15,14 @@
     <span class="logo">◈</span>
     <span><strong>Episteme</strong><small>a flight recorder for AI-assisted research</small></span>
   </button>
-  <nav id="tabs">
+  <div class="task-badge" id="task-badge" title="AI4MetaScience Hackathon · Task 2 Focus">
+    <span class="pulse-dot"></span>
+    <span><strong>Task 2 MVP:</strong> Provenance Lab Notebook</span>
+  </div>
+  <div class="hdr-actions">
+    <button type="button" class="btn ghost small quick-demo-btn" id="quick-demo-btn" title="Quickly load the AlphaFold 2 discovery demo">⚡ Load AlphaFold Demo</button>
+  </div>
+  <nav id="tabs" hidden>
     <button data-tab="question"><span class="num">1</span> Vet question</button>
     <span class="arrow">→</span>
     <button data-tab="diary" class="active"><span class="num">2</span> Record work</button>
@@ -50,7 +57,8 @@
     <div class="start-head">
       <span class="logo">◈</span>
       <h1 id="start-title">Episteme</h1>
-      <p class="muted">A flight recorder for AI-assisted research. Start a study notebook, or explore a demo.</p>
+      <p class="start-sub"><strong>AI4MetaScience Hackathon · Task 2 MVP</strong></p>
+      <p class="muted">A provenance-preserving flight recorder for AI-assisted research. Captures plans, runs, surprises, and pivots so any reviewer can answer: <em>"Why did they change approach at step 4?"</em></p>
     </div>
     <button type="button" id="start-continue" class="card start-continue" hidden></button>
     <div class="start-grid">
@@ -65,6 +73,9 @@
         <h2>Load a demo</h2>
         <p class="muted">A simulated study captured as a real session would be, with a change of approach at step 4. Ask the log why.</p>
         <div id="start-demos" class="start-demos"></div>
+        <div class="start-replay-hint muted small">
+          💡 <b>Live terminal replay:</b> <code>python3 tools/replay.py demo/alphafold.jsonl --speed 15</code>
+        </div>
       </div>
     </div>
     <p class="muted small start-warn" id="start-warn" hidden></p>
@@ -98,6 +109,17 @@
         <div class="intro">
           <h2 id="project-name">Research diary</h2>
           <p>Plans, runs, surprises and pivots, with the <i>why</i>. The badge on each entry says who stated it: the researcher, the agent, or Episteme's own inference (lower trust).</p>
+        </div>
+        <div class="attribution-legend">
+          <span class="legend-item"><span class="chip t-plan">Plan</span> Expected metric</span>
+          <span class="legend-item"><span class="chip t-run">Run</span> Code &amp; params</span>
+          <span class="legend-item"><span class="chip t-surprise">Surprise</span> Contradiction</span>
+          <span class="legend-item"><span class="chip t-pivot">Pivot</span> Approach shift</span>
+          <span class="legend-sep">|</span>
+          <span class="legend-item"><span class="prov">Researcher</span> Stated</span>
+          <span class="legend-item"><span class="prov">Agent</span> Verbatim quote</span>
+          <span class="legend-item"><span class="prov inferred">Inferred</span> Rule/LLM</span>
+          <span class="legend-item"><span class="prov ok">✓ Confirmed</span></span>
         </div>
         <form id="add-form" class="card add">
           <div class="row">
@@ -135,9 +157,11 @@
       </div>
 
       <aside class="col-side">
-        <div class="card">
+        <div class="card reviewer-card">
+          <div class="reviewer-badge">Auditor Station · Task 2</div>
           <h3>Reviewer: ask the log</h3>
           <p class="muted">Answers cite only diary events, like a reviewer who wasn't there would need.</p>
+          <button type="button" class="golden-test-btn" id="golden-test-btn">🎯 Test Question: "Why did they change approach at step 4?"</button>
           <form id="ask-form" class="row">
             <input id="ask-input" placeholder="Why did they change approach at step 4?" autocomplete="off">
             <button class="primary">Ask</button>
@@ -145,12 +169,12 @@
           <div class="examples" id="ask-examples"></div>
           <div id="ask-out"></div>
         </div>
-        <details class="card tools">
-          <summary>Export and capture</summary>
+        <details class="card tools" open>
+          <summary>Export and capture (W3C PROV-JSON)</summary>
           <div class="btns">
-            <a class="btn" href="/api/export?format=md">Decision appendix (.md)</a>
-            <a class="btn" href="/api/export?format=prov">W3C PROV-JSON</a>
-            <a class="btn" href="/api/export?format=json">Raw JSON</a>
+            <a class="btn primary-outline" href="/api/export?format=prov" title="W3C Provenance standard JSON">W3C PROV-JSON</a>
+            <a class="btn" href="/api/export?format=md" title="Paper decision appendix in Markdown">Decision appendix (.md)</a>
+            <a class="btn" href="/api/export?format=json" title="Raw diary JSON">Raw JSON</a>
           </div>
           <h3>Capture from other tools</h3>
           <p class="muted">Claude Code and git: <code>python3 capture/install.py &lt;project&gt;</code>. Any other script, notebook or agent can log events:</p>

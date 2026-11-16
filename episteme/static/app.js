@@ -636,6 +636,13 @@ $("#ask-form").addEventListener("submit", (e) => {
     $("#ask-out").innerHTML = `<div class="answer">${md(res.answer)}</div>${modeNote(res)}`;
   });
 });
+const goldenBtn = $("#golden-test-btn");
+if (goldenBtn) {
+  goldenBtn.addEventListener("click", () => {
+    $("#ask-input").value = "Why did they change approach at step 4?";
+    $("#ask-form").requestSubmit();
+  });
+}
 
 // ---------------------------------------------------------------- start screen
 // Shown once each time Episteme starts (the token changes per start), and from the logo.
@@ -694,6 +701,18 @@ $("#start-demos").addEventListener("click", (e) => {
     toast(`Demo loaded: ${r.events} entries. Try asking why they changed approach at step 4.`);
   });
 });
+const quickDemoBtn = $("#quick-demo-btn");
+if (quickDemoBtn) {
+  quickDemoBtn.addEventListener("click", () => {
+    busy(quickDemoBtn, async () => {
+      const r = await api("/api/demo", { id: "alphafold" });
+      await afterNewStudy();
+      toast(`AlphaFold 2 demo loaded: ${r.events} entries. Auditing step 4 pivot...`);
+      $("#ask-input").value = "Why did they change approach at step 4?";
+      $("#ask-form").requestSubmit();
+    });
+  });
+}
 $("#start-continue").addEventListener("click", closeStart);
 $("#open-start").addEventListener("click", () => openStart().catch((e) => toast("Error: " + e.message)));
 $("#new-study").addEventListener("click", () => openStart().catch((e) => toast("Error: " + e.message)));
