@@ -11,7 +11,7 @@
 </head>
 <body>
 <header>
-  <button type="button" class="brand" id="open-start" title="Start screen: new study or demo">
+  <button type="button" class="brand" id="open-start" title="Start screen: your studies, a new notebook or a demo">
     <span class="logo">◈</span>
     <span><strong>Episteme</strong><small>a flight recorder for AI-assisted research</small></span>
   </button>
@@ -22,6 +22,9 @@
     <span class="arrow">→</span>
     <button data-tab="claims"><span class="num">3</span> Check claims</button>
   </nav>
+  <button type="button" id="hdr-studies" class="badge hdr-studies" title="Back to the start screen: open another study, start a new one or load a demo">
+    <span class="muted">Studies</span> <b id="hdr-study"></b>
+  </button>
   <details class="ai hdr-menu" id="hdr-menu">
     <summary class="badge" id="hdr-sum" title="Model, search and theme">…</summary>
     <div class="menu">
@@ -52,7 +55,11 @@
       <h1 id="start-title">Episteme</h1>
       <p class="muted">A flight recorder for AI-assisted research. Start a study notebook, or explore a demo.</p>
     </div>
-    <button type="button" id="start-continue" class="card start-continue" hidden></button>
+    <div id="start-saved" class="card start-card" hidden>
+      <h2>Your studies</h2>
+      <p class="muted">Every notebook and demo is saved on this machine in <code>.episteme/studies/</code>. Capture from Claude Code and git goes to the open one.</p>
+      <ul id="start-studies" class="start-studies"></ul>
+    </div>
     <div class="start-grid">
       <form id="start-new" class="card start-card">
         <h2>New study notebook</h2>
@@ -63,11 +70,10 @@
       </form>
       <div class="card start-card">
         <h2>Load a demo</h2>
-        <p class="muted">A simulated study captured as a real session would be, with a change of approach at step 4. Ask the log why.</p>
+        <p class="muted">A simulated study captured as a real session would be, with a change of approach at step 4. Ask the log why. A demo you loaded before opens where you left it; delete it from your studies to start it fresh.</p>
         <div id="start-demos" class="start-demos"></div>
       </div>
     </div>
-    <p class="muted small start-warn" id="start-warn" hidden></p>
   </div>
 </section>
 
@@ -156,7 +162,7 @@
           <p class="muted">Claude Code and git: <code>python3 capture/install.py &lt;project&gt;</code>. Any other script, notebook or agent can log events:</p>
           <pre class="snippet" id="curl-snippet"></pre>
           <div class="btns">
-            <button id="new-study" class="ghost">New study or demo…</button>
+            <button id="new-study" class="ghost">All studies…</button>
           </div>
         </details>
       </aside>
