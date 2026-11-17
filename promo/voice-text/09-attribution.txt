@@ -1,0 +1,1 @@
+Every entry carries a badge: stated by the researcher, stated by the agent, or inferred by Episteme's own rules. So a reviewer always knows how much weight each line can bear.

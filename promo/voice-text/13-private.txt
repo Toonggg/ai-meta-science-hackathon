@@ -1,0 +1,1 @@
+Episteme runs entirely on your machine. Secrets are stripped from captured text before anything is stored. It works with no model at all, or with Claude, OpenAI, Gemini, or a local model through Ollama. And every study is saved separately, so you can move between projects at any time.
