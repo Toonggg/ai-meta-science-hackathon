@@ -148,7 +148,7 @@ Output: ambiguous terms with their senses, implicit assumptions, evidence needed
 
 ## Data model and exports
 
-State lives in `.episteme/` (gitignored): `diary.json`, `raw.jsonl`, `stitch.json`, `config.json`, `token`, `spool.jsonl`.
+State lives in `.episteme/` (gitignored). Each study has its own folder, `studies/<id>/`, holding `diary.json`, `raw.jsonl` and `stitch.json`; `current` names the open one. Shared files: `config.json`, `token`, `spool.jsonl`. Capture hooks always write to the open study.
 
 A diary event (full shape in the docstring of `episteme/store.py`):
 
@@ -246,7 +246,8 @@ All JSON, on `http://127.0.0.1:8765`. Routes marked † need the page token.
 | `GET /api/export?format=md\|prov\|json` | exports |
 | `POST /api/question/start`, `GET /api/jobs/<id>` | Task 1 staged job |
 | `POST /api/claims`, `GET /api/demo-paper` | Task 3 claim map; the loaded demo's paper |
-| `GET /api/demos`, `POST /api/demo` †, `POST /api/clear` †, `POST /api/delete` † | demos and diary management |
+| `GET /api/studies`, `POST /api/studies/new` †, `POST /api/studies/open` †, `POST /api/studies/delete` † | saved studies: list, new, open, delete (never the open one) |
+| `GET /api/demos`, `POST /api/demo` †, `POST /api/clear` †, `POST /api/delete` † | demos (opens the saved copy, or loads it into a new study), empty the open study, delete an entry |
 | `GET /api/status`, `POST /api/settings` †, `GET /api/sources`, `POST /api/sources` †, `POST /api/sources/check` | model and search configuration and health |
 
 ## Repository layout
@@ -255,6 +256,7 @@ All JSON, on `http://127.0.0.1:8765`. Routes marked † need the page token.
 run                     launcher: loads .env, starts the server, opens the browser
 episteme/server.py      HTTP server and JSON API (127.0.0.1 only)
 episteme/store.py       diary (diary.json) and raw log (raw.jsonl)
+episteme/studies.py     saved studies, one folder each
 episteme/episodes.py    raw events -> episodes (pure function)
 episteme/stitcher.py    episodes -> diary events; rules propose, the model confirms
 episteme/diary.py       hypothesis ledger, why-prompts, confirm flow, ask the log

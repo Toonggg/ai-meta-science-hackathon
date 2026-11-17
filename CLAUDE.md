@@ -13,7 +13,7 @@ Episteme: a local browser tool built for the AI4MetaScience hackathon (brief: `A
 ```bash
 ./run                    # start server + open browser (reuses a running instance); Ctrl+C stops
 ./run --offline          # no network: no model, no search
-./run --reset            # start from an empty diary (wipes diary, raw log, stitch state)
+./run --reset            # delete all saved studies (asks first) and start empty
 ./run --no-open --port 9000
 
 python3 -m unittest discover -s tests                       # all tests
@@ -27,7 +27,7 @@ python3 capture/install.py /path/to/project   # install Claude Code + git captur
 
 `python3 -m unittest tests.test_x` does **not** work: the test modules put `episteme/`, `capture/` and `tools/` on `sys.path` themselves and import modules by bare name (`import server`, `from store import Diary`). Use `discover -s tests`. The `episteme/*.py` modules likewise import each other by bare name, not as a package.
 
-`./run` sources `.env` (gitignored) for API keys. State lives in `.episteme/` (gitignored): `diary.json`, `raw.jsonl`, `stitch.json`, `config.json`, `token`, `url`, `server.log`, `spool.jsonl`.
+`./run` sources `.env` (gitignored) for API keys. State lives in `.episteme/` (gitignored): one folder per saved study, `studies/<id>/{diary.json, raw.jsonl, stitch.json}`, plus `current` (the open study's id), `config.json`, `token`, `url`, `server.log`, `spool.jsonl`.
 
 ## Architecture
 
@@ -46,7 +46,7 @@ capture/claude_hook.py, capture/git_post_commit
 - **Raw vs diary**: `raw.jsonl` holds everything captured; `diary.json` holds only decisions (plan/run/surprise/pivot/note/artifact/question). Diary events point back at evidence via `raw_ids`. Event and raw shapes are documented in the docstrings of `store.py` and `episodes.py`.
 - **episodes.py**: `segment()` must stay a pure function of the raw list with bounded look-ahead, so earlier episode ids never change as new raw events arrive. Only *final* episodes get stitched. Results are detected from `RESULT key=value` lines in command output.
 - **stitcher.py**: "rules propose, the model confirms." Rules create plan/run/surprise/artifact events instantly. Episodes flagged as possible changes of approach get a pending pivot, then the LLM classifies it *outside* the stitcher lock. A "stated" reason must be a verbatim quote found in the source text; otherwise it's downgraded to "inferred". Model paraphrase goes in `model_summary`, never in `detail`.
-- **Attribution is server-decided.** `server.py` strips `ATTRIBUTION_FIELDS` (actor, confirmed_by, quote, raw_ids…) from posted events. Routes in `NEEDS_TOKEN` (confirm, pivot, delete, demo, clear, settings, sources) require the per-start random token embedded in the page (also written to `.episteme/token`). `tests/test_security.py` covers this, plus host/origin checks.
+- **Attribution is server-decided.** `server.py` strips `ATTRIBUTION_FIELDS` (actor, confirmed_by, quote, raw_ids…) from posted events. Routes in `NEEDS_TOKEN` (confirm, pivot, delete, demo, clear, studies/*, settings, sources) require the per-start random token embedded in the page (also written to `.episteme/token`). `tests/test_security.py` covers this, plus host/origin checks.
 - **redact.py** strips secrets from captured text before it is stored or sent.
 
 ### Task 1 and Task 3
@@ -58,10 +58,12 @@ capture/claude_hook.py, capture/git_post_commit
 
 ### Start screen and demos
 
-- On each server start the UI shows a start screen (`#start` in `index.html`, `openStart()` in `app.js`): new study notebook, load a demo, or continue the open study. The ◈ logo and the sidebar "New study or demo…" reopen it. There is one diary at a time; starting or loading replaces it.
+- On each server start the UI shows a start screen (`#start` in `index.html`, `openStart()` in `app.js`): saved studies, a new study notebook, or a demo. The header's Studies button, the ◈ logo and the sidebar "All studies…" reopen it.
+- **Saved studies** (`studies.py`): one folder per study; one is open at a time. `server.open_study()` switches by repointing `STORE`/`RAW` (`.open(path)`) and the stitcher (`Stitcher.switch()`, which bumps its generation so a model answer for the old study is dropped). Nothing else holds a path, so the rest of the code just uses the globals. `new_study()` reuses the open study if it is blank. `server.open_state()` sets everything up (tests use it too); it also moves a pre-studies `.episteme/diary.json` into a study. Tests that assign `server.STORE` etc. by hand leave `STUDIES = None`, and then `/api/demo` loads into the open diary instead.
 - Demos live in `demo/`, listed in `demo/demos.json` (id, title, project, summary, session file, optional paper). Every demo is a raw capture session (`.jsonl`) and loads through `server.load_demo()` → `RawLog` → episodes → stitcher, the same path as live capture, so demos and real sessions can't drift apart. The stitcher runs with `ask_model=False` during the load; the background thread classifies pivots afterwards if a model is set.
 - `{"kind": "note", "about": "last_run", ...}` lines are researcher notes (not raw capture); `demos.py` adds them to the diary once the raw lines before them are stitched. `tools/replay.py` understands them too, and `tests/test_demos.py` checks that replay and load give the same diary.
-- A new demo is a `.jsonl` file plus an entry in `demos.json`. API: `GET /api/demos`, `POST /api/demo {"id"}` (token), `GET /api/demo-paper` (paper of the loaded demo, or empty).
+- Loading a demo opens its saved copy if there is one, else loads it into a new study.
+- A new demo is a `.jsonl` file plus an entry in `demos.json`. API: `GET /api/demos`, `POST /api/demo {"id"}` (token), `GET /api/demo-paper` (paper of the loaded demo, or empty), `GET /api/studies`, `POST /api/studies/new|open|delete` (token).
 
 ### LLM layer
 

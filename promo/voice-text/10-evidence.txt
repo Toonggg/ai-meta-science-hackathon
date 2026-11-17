@@ -1,0 +1,1 @@
+Open any run, and you see what was actually executed: the command, its parameters, and its result. And one click further, the raw capture it came from.

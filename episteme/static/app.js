@@ -295,6 +295,7 @@ async function loadDiary() {
   $("#project-name").textContent = snap.project || "Research diary";
   $("#tl-replay-btn").hidden = !snap.demo || replay.active;
   if (replay.active) snap.events.forEach((e) => { if (!replay.seen.has(e.id)) replay.hold.add(e.id); }); // the replay reveals these one by one
+  $("#hdr-study").textContent = snap.project || "Untitled study";
   renderTimeline();
 }
 
@@ -644,27 +645,33 @@ $("#ask-form").addEventListener("submit", (e) => {
 });
 
 // ---------------------------------------------------------------- start screen
-// Shown once each time Episteme starts (the token changes per start), and from the logo.
+// Shown once each time Episteme starts (the token changes per start), and from the logo or the
+// Studies button. Every study is saved in its own folder; opening one never deletes another.
 const START_SEEN = "episteme-start-seen";
 function startSeen() { try { return sessionStorage.getItem(START_SEEN) === TOKEN; } catch { return false; } }
 function markStartSeen() { try { sessionStorage.setItem(START_SEEN, TOKEN); } catch { /* private mode: show it again next load */ } }
 
+const when = (iso) => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" }); };
+const entries = (n) => `${n} ${n === 1 ? "entry" : "entries"}`;
+
 async function openStart() {
-  const [{ demos, current }, snap] = await Promise.all([api("/api/demos"), api("/api/events")]);
-  const n = snap.events.length;
-  const cont = $("#start-continue");
-  cont.hidden = !n;
-  cont.innerHTML = n ? `<b>Continue: ${esc(snap.project || "current study")}</b><small>${n} ${n === 1 ? "entry" : "entries"}${current ? " · demo" : ""}</small>` : "";
+  const [{ demos }, { studies, current }] = await Promise.all([api("/api/demos"), api("/api/studies")]);
+  $("#start-saved").hidden = !studies.length;
+  $("#start-studies").innerHTML = studies.map((st) => {
+    const open = st.id === current;
+    const meta = [entries(st.events), st.demo ? "demo" : "", st.modified ? "changed " + when(st.modified) : ""].filter(Boolean).join(" · ");
+    return `<li class="start-study${open ? " current" : ""}">
+      <button type="button" class="start-open" data-open="${esc(st.id)}"><b>${esc(st.project || "Untitled study")}</b><small>${open ? "Open now · " : ""}${esc(meta)}</small></button>
+      ${open ? "" : `<button type="button" class="ghost start-del" data-del-study="${esc(st.id)}" title="Delete this study and its capture">Delete</button>`}
+    </li>`;
+  }).join("");
   $("#start-demos").innerHTML = demos.map((d) => `<div class="start-demo-row">
-      <button type="button" class="start-demo" data-demo="${esc(d.id)}"><b>${esc(d.title)}</b><span class="muted">${esc(d.summary)}</span></button>
+      <button type="button" class="start-demo" data-demo="${esc(d.id)}"><b>${esc(d.title)}${d.saved ? ` <small class="muted">· saved, opens your copy</small>` : ""}</b><span class="muted">${esc(d.summary)}</span></button>
       <button type="button" class="replay" data-replay="${esc(d.id)}" title="Watch the diary being written, one entry at a time">▶ Replay</button>
     </div>`).join("");
-  const warn = $("#start-warn");
-  warn.hidden = !n;
-  warn.textContent = n ? `Starting a notebook or loading a demo replaces the current diary (${n} ${n === 1 ? "entry" : "entries"}) and its raw capture. Export it first to keep it.` : "";
   $("#start").hidden = false;
   document.body.style.overflow = "hidden";
-  (n ? cont : $("#start-project")).focus();
+  ($(".start-study.current .start-open") || $("#start-project")).focus();
 }
 
 function closeStart() {
@@ -711,7 +718,7 @@ async function runLiveReplay(demoId) {
     while (step < total) {
       const r = await api("/api/demo/step", { id: demoId, step, reset: step === 0 });
       total = r.total;
-      if (step === 0) await afterNewStudy(); // closes the start screen, shows the emptied diary
+      if (step === 0) await afterSwitch(); // the demo's study is open and empty: close the start screen
       await loadDiary();
       const fresh = state.events.filter((e) => !replay.seen.has(e.id));
       fresh.forEach((e) => replay.seen.add(e.id));
@@ -738,7 +745,7 @@ async function runLiveReplay(demoId) {
 $("#replay-skip-btn").addEventListener("click", () => { replay.fast = true; });
 $("#tl-replay-btn").addEventListener("click", () => runLiveReplay(state.demo));
 
-async function afterNewStudy() { // a different diary: drop what the page showed for the old one
+async function afterSwitch() { // another study is open: drop what the page showed for the old one
   $("#prompts").innerHTML = ""; $("#ask-out").innerHTML = "";
   if ($("#c-out")) $("#c-out").innerHTML = "";
   if ($("#c-input")) $("#c-input").value = "";
@@ -752,11 +759,29 @@ $("#start-new").addEventListener("submit", (e) => {
   const project = $("#start-project").value.trim();
   if (!project) return $("#start-project").focus();
   busy($("#start-new button"), async () => {
-    await api("/api/clear", { project });
+    await api("/api/studies/new", { project });
     $("#start-project").value = "";
-    await afterNewStudy();
+    await afterSwitch();
     toast("New notebook started. Add a plan with an expectation to begin.");
     $("#add-title").focus();
+  });
+});
+$("#start-studies").addEventListener("click", async (e) => {
+  const del = e.target.closest("[data-del-study]");
+  if (del) {
+    const name = del.closest(".start-study").querySelector("b").textContent;
+    if (!confirm(`Delete "${name}"? Its diary and raw capture are removed from this machine. Export it first to keep a copy.`)) return;
+    try { await api("/api/studies/delete", { id: del.dataset.delStudy }); await openStart(); toast(`Deleted "${name}".`); }
+    catch (err) { toast("Error: " + err.message); }
+    return;
+  }
+  const b = e.target.closest("[data-open]");
+  if (!b) return;
+  if (b.closest(".start-study.current")) return closeStart();
+  busy(b, async () => {
+    const r = await api("/api/studies/open", { id: b.dataset.open });
+    await afterSwitch();
+    toast(`Opened: ${entries(r.events)}.`);
   });
 });
 $("#start-demos").addEventListener("click", (e) => {
@@ -766,14 +791,15 @@ $("#start-demos").addEventListener("click", (e) => {
   if (!b) return;
   busy(b, async () => {
     const r = await api("/api/demo", { id: b.dataset.demo });
-    await afterNewStudy();
-    toast(`Demo loaded: ${r.events} entries. Ask the log why they changed approach.`);
+    await afterSwitch();
+    toast(`Demo open: ${entries(r.events)}. Try asking why they changed approach at step 4.`);
   });
 });
-$("#start-continue").addEventListener("click", closeStart);
-$("#open-start").addEventListener("click", () => openStart().catch((e) => toast("Error: " + e.message)));
-$("#new-study").addEventListener("click", () => openStart().catch((e) => toast("Error: " + e.message)));
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#start").hidden && !$("#start-continue").hidden) closeStart(); });
+const showStart = () => openStart().catch((e) => toast("Error: " + e.message));
+$("#open-start").addEventListener("click", showStart);
+$("#hdr-studies").addEventListener("click", showStart);
+$("#new-study").addEventListener("click", showStart);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#start").hidden) closeStart(); });
 
 async function refreshCapture() {
   state.stitch = await api("/api/stitch").catch(() => null);

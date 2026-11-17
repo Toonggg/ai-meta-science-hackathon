@@ -31,14 +31,14 @@ Your browser opens Episteme at `http://127.0.0.1:8765`. Press **Ctrl+C** in the 
 |---|---|
 | `./run` | start and open the browser |
 | `./run --offline` | no network at all: no model, no literature search |
-| `./run --reset` | start from an empty diary |
+| `./run --reset` | delete all saved studies and start empty (asks first) |
 | `./run --no-open --port 9000` | don't open a browser; use another port |
 
 Everything you record stays on your computer, in the `.episteme/` folder.
 
 ## 2. A five-minute tour with a demo
 
-Episteme opens on a **start screen** with three choices: start a new study notebook, load a demo, or continue the study you had open. Click the **◈ Episteme** logo at the top left at any time to return to it.
+Episteme opens on a **start screen**: your saved studies, a new study notebook, or a demo. Every study is saved on your machine, so you can switch between them at any time. To get back to the start screen from inside a study, click **Studies** at the top right (it shows the name of the open study) or the **◈ Episteme** logo.
 
 Both demos are simulated studies, made to show the tool. Load **Hospital readmission**.
 
@@ -80,7 +80,7 @@ Then, in **Reviewer: ask the log** on the right, click **Why did they change app
 
 ## 3. Record your own study by hand
 
-On the start screen, type a project name under **New study notebook** and click **Start notebook**. This replaces the open diary, so export it first if you want to keep it (see [section 6](#6-export-the-record)).
+On the start screen, type a project name under **New study notebook** and click **Start notebook**. Your other studies are kept; open them again from **Your studies** on the start screen. A study you no longer need can be deleted there (export it first to keep a copy, see [section 6](#6-export-the-record)).
 
 Use the bar at the top of **Record work**. Pick a type, write one line, and click **Add**:
 
@@ -161,7 +161,7 @@ Open **Export and capture** in the sidebar:
 | W3C PROV-JSON | provenance tools that read the W3C PROV standard; keeps who stated, classified and confirmed each step |
 | Raw JSON | a full backup of the diary |
 
-The same panel has **New study or demo…**, which reopens the start screen.
+The same panel has **All studies…**, which reopens the start screen.
 
 ## 7. Vet a research question (Task 1)
 
