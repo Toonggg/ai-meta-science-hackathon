@@ -11,37 +11,46 @@
   "pauses": {"chunk": 0.25, "beat": 0.7, "scene": 1.4, "lead_in": 0.6},
   "scenes": [
     {
+      "id": "00-hook",
+      "beats": [
+        {"slide": {"type": "hero", "title": "You're a researcher. You want your work to be *reproducible*."},
+         "say": "Picture yourself as a researcher. You want your work to be reproducible."},
+        {"slide": {"type": "hero", "title": "You're a researcher. You want your work to be *reproducible*.", "sub": "Anyone should be able to follow what you did, and why you did it."},
+         "say": "Anyone who reads it should be able to follow what you did, and why you did it."},
+        {"slide": {"type": "points", "kicker": "The setting", "title": "So you keep a notebook. It records *what*, rarely *why*.", "items": ["Written at the end of the day, from memory, when there is time", "Runs and results, but not the reason a plan was dropped", "Notes that point at no exact code, run or output"], "show": 1},
+         "say": "So you keep a notebook. But you write it at the end of the day, from memory, when there's time."},
+        {"slide": {"type": "points", "kicker": "The setting", "title": "So you keep a notebook. It records *what*, rarely *why*.", "items": ["Written at the end of the day, from memory, when there is time", "Runs and results, but not the reason a plan was dropped", "Notes that point at no exact code, run or output"], "show": 2},
+         "say": "It records what you ran and what came out. It rarely records why you dropped one approach for another."},
+        {"slide": {"type": "points", "kicker": "The setting", "title": "So you keep a notebook. It records *what*, rarely *why*.", "items": ["Written at the end of the day, from memory, when there is time", "Runs and results, but not the reason a plan was dropped", "Notes that point at no exact code, run or output"], "show": 3},
+         "say": "And nothing ties a note to the exact code, run or output it describes."},
+        {"slide": {"type": "hero", "title": "Months later, someone reads your paper.", "sub": "A reviewer. A colleague building on it. You, a year from now."},
+         "say": "Months later, someone reads your paper. A reviewer, a colleague who wants to build on it, or you, a year from now. And they ask a simple question."}
+      ]
+    },
+    {
       "id": "01-hook",
       "beats": [
-        {"slide": {"type": "hero", "title": "Why did they change approach at *step 4*?"},
-         "say": "Why did they change approach at step four?"},
-        {"slide": {"type": "hero", "title": "Why did they change approach at *step 4*?", "sub": "The simplest question a reviewer can ask. Usually, nobody can answer it."},
-         "say": "It's the simplest question a reviewer can ask about a study. And most of the time, nobody can answer it. Not even the people who did the work."}
+        {"slide": {"type": "hero", "title": "Why did you change approach *halfway through*?"},
+         "say": "Why did you change approach halfway through?"},
+        {"slide": {"type": "hero", "title": "Why did you change approach *halfway through*?", "sub": "A simple question. Usually, nobody can answer it."},
+         "say": "It sounds simple. But most of the time, nobody can answer it accurately. Not even the people who did the work."}
       ]
     },
     {
       "id": "02-problem",
       "beats": [
-        {"slide": {"type": "points", "kicker": "The problem", "title": "Research keeps its results. It loses its *reasons*.",
-                   "items": ["The paper reports the path that worked", "Dead ends, failed runs, broken expectations: gone", "Notebooks: written later, from memory, if at all"], "show": 1},
+        {"slide": {"type": "points", "kicker": "The problem", "title": "Research keeps its results. It loses its *reasons*.", "items": ["The paper reports the path that worked", "Dead ends, failed runs, broken expectations: gone"], "show": 1},
          "say": "A paper reports the path that worked."},
-        {"slide": {"type": "points", "kicker": "The problem", "title": "Research keeps its results. It loses its *reasons*.",
-                   "items": ["The paper reports the path that worked", "Dead ends, failed runs, broken expectations: gone", "Notebooks: written later, from memory, if at all"], "show": 2},
-         "say": "The dead ends, the failed runs, the expectation that turned out wrong, and the moment someone said: this isn't working, let's try something else. None of that survives."},
-        {"slide": {"type": "points", "kicker": "The problem", "title": "Research keeps its results. It loses its *reasons*.",
-                   "items": ["The paper reports the path that worked", "Dead ends, failed runs, broken expectations: gone", "Notebooks: written later, from memory, if at all"], "show": 3},
-         "say": "Lab notebooks were meant to hold it. But they're written after the fact, from memory, if they're written at all."}
+        {"slide": {"type": "points", "kicker": "The problem", "title": "Research keeps its results. It loses its *reasons*.", "items": ["The paper reports the path that worked", "Dead ends, failed runs, broken expectations: gone"], "show": 2},
+         "say": "The dead ends, the failed runs, the expectation that turned out wrong, and the moment someone said: this isn't working, let's try something else. None of that survives."}
       ]
     },
     {
       "id": "03-reproducibility",
       "beats": [
-        {"slide": {"type": "stat", "kicker": "Why it matters", "number": "70%+", "label": "of researchers have tried and failed to reproduce another scientist's experiments",
-                   "source": "M. Baker, “1,500 scientists lift the lid on reproducibility”, Nature 533, 452–454 (2016). Survey of 1,576 researchers."},
+        {"slide": {"type": "stat", "kicker": "Why it matters", "number": "70%+", "label": "of researchers have tried and failed to reproduce another scientist's experiments", "source": "M. Baker, “1,500 scientists lift the lid on reproducibility”, Nature 533, 452–454 (2016). Survey of 1,576 researchers."},
          "say": "This is not a small gap. In a 2016 Nature survey of more than fifteen hundred researchers, over seventy percent said they had tried and failed to reproduce another scientist's experiments."},
-        {"slide": {"type": "stat", "kicker": "Why it matters", "number": "70%+", "label": "of researchers have tried and failed to reproduce another scientist's experiments",
-                   "source": "M. Baker, “1,500 scientists lift the lid on reproducibility”, Nature 533, 452–454 (2016). Survey of 1,576 researchers.",
-                   "note": "The first question is always: *what exactly did they do, and why?*"},
+        {"slide": {"type": "stat", "kicker": "Why it matters", "number": "70%+", "label": "of researchers have tried and failed to reproduce another scientist's experiments", "source": "M. Baker, “1,500 scientists lift the lid on reproducibility”, Nature 533, 452–454 (2016). Survey of 1,576 researchers.", "note": "The first question is always: *what exactly did they do, and why?*"},
          "say": "And when a result can't be reproduced, the first question is always the same. What exactly did they do, and why?"}
       ]
     },
@@ -61,8 +70,7 @@
       "beats": [
         {"slide": {"type": "hero", "logo": true, "title": "Episteme", "sub": "A flight recorder for AI-assisted research"},
          "say": "Meet Episteme: a flight recorder for AI-assisted research."},
-        {"slide": {"type": "hero", "logo": true, "title": "Episteme", "sub": "A flight recorder for AI-assisted research",
-                   "chips": ["What was planned", "What was run", "What happened", "Why it changed"]},
+        {"slide": {"type": "hero", "logo": true, "title": "Episteme", "sub": "A flight recorder for AI-assisted research", "chips": ["What was planned", "What was run", "What happened", "Why it changed"]},
          "say": "It records what was planned, what was run, what happened, and why the approach changed. While the work happens, not afterwards."}
       ]
     },
@@ -73,39 +81,31 @@
          "say": "You install two hooks: one in Claude Code, and one in git. From then on, every instruction, command, result and commit is captured automatically, into a raw log on your own machine."},
         {"slide": {"type": "flow", "kicker": "How it works", "title": "Capture everything. Keep the *decisions*.", "show": 4, "focus": 3},
          "say": "Episteme groups that stream into episodes, and turns each one into a short diary of decisions: plans, runs, surprises, and changes of approach."},
-        {"slide": {"type": "shot", "kicker": "How it works", "title": "Every entry points back to its *evidence*",
-                   "body": "The raw log keeps everything the hooks saw, grouped into episodes. The diary keeps what a reviewer needs.",
-                   "img": "raw-capture.jpg", "spot": [24, 556, 820, 236]},
+        {"slide": {"type": "shot", "kicker": "How it works", "title": "Every entry points back to its *evidence*", "body": "The raw log keeps everything the hooks saw, grouped into episodes. The diary keeps what a reviewer needs.", "img": "raw-capture.jpg", "spot": [24, 556, 820, 236]},
          "say": "The raw log keeps everything. The diary keeps only what a reviewer needs, and every diary entry points back to the raw evidence behind it."}
       ]
     },
     {
       "id": "07-timeline",
       "beats": [
-        {"slide": {"type": "shot", "kicker": "The notebook", "title": "A study, step by step",
-                   "body": "Demo study: predicting 30-day hospital readmission from clinical notes.", "img": "timeline.jpg"},
+        {"slide": {"type": "shot", "kicker": "The notebook", "title": "A study, step by step", "body": "Demo study: predicting 30-day hospital readmission from clinical notes.", "img": "timeline.jpg"},
          "say": "Here's what that looks like, on a demo study that predicts hospital readmission from clinical notes."},
-        {"slide": {"type": "shot", "kicker": "Step 1 · Plan", "title": "The expectation, stated *up front*",
-                   "body": "The researcher expects AUROC ≥ 0.75 before anything runs.", "img": "timeline.jpg", "spot": [72, 432, 772, 86]},
+        {"slide": {"type": "shot", "kicker": "Step 1 · Plan", "title": "The expectation, stated *up front*", "body": "The researcher expects AUROC ≥ 0.75 before anything runs.", "img": "timeline.jpg", "spot": [72, 432, 772, 86]},
          "say": "Step one: the researcher's plan, with an expectation stated up front. An AUROC of at least 0.75."},
-        {"slide": {"type": "shot", "kicker": "Step 2 · Run", "title": "The agent runs the *baseline*",
-                   "body": "The run is captured with its command and its result: AUROC 0.54.", "img": "timeline.jpg", "spot": [72, 531, 772, 65]},
+        {"slide": {"type": "shot", "kicker": "Step 2 · Run", "title": "The agent runs the *baseline*", "body": "The run is captured with its command and its result: AUROC 0.54.", "img": "timeline.jpg", "spot": [72, 531, 772, 65]},
          "say": "Step two: the agent runs a baseline. The result is 0.54."},
-        {"slide": {"type": "shot", "kicker": "Step 3 · Surprise", "title": "Contradictions are caught *automatically*",
-                   "body": "Episteme compares every result with the expectation before it, and records the surprise itself.", "img": "timeline.jpg", "spot": [72, 609, 772, 65]},
+        {"slide": {"type": "shot", "kicker": "Step 3 · Surprise", "title": "Contradictions are caught *automatically*", "body": "Episteme compares every result with the expectation before it, and records the surprise itself.", "img": "timeline.jpg", "spot": [72, 609, 772, 65]},
          "say": "Step three: Episteme notices, on its own, that the result contradicts the expectation, and records a surprise. Nobody had to write it down."}
       ]
     },
     {
       "id": "08-pivot",
       "beats": [
-        {"slide": {"type": "shot", "kicker": "Step 4 · Pivot", "title": "A change of approach asks *why*",
-                   "body": "The rules flag the pivot and ask for the reason, in the researcher's own words.", "img": "timeline.jpg", "spot": [24, 258, 820, 110]},
+        {"slide": {"type": "shot", "kicker": "Step 4 · Pivot", "title": "A change of approach asks *why*", "body": "The rules flag the pivot and ask for the reason, in the researcher's own words.", "img": "timeline.jpg", "spot": [24, 258, 820, 110]},
          "say": "Step four is the change of approach. Episteme's rules flag it, and ask for the reason, in the researcher's own words."},
         {"slide": {"type": "badges", "kicker": "Step 4 · Pivot", "title": "Quoted, or marked as *inferred*", "mode": "stated"},
          "say": "If a language model is connected, it proposes the reason, but only as a word-for-word quote of what was said at the time. Anything it can't quote is marked as inferred, and never presented as fact."},
-        {"slide": {"type": "shot", "kicker": "Step 4 · Pivot", "title": "One click to *confirm*",
-                   "body": "The reason is on the record, linked to the surprise that triggered it.", "img": "pivot-and-ask.jpg", "spot": [72, 572, 772, 208]},
+        {"slide": {"type": "shot", "kicker": "Step 4 · Pivot", "title": "One click to *confirm*", "body": "The reason is on the record, linked to the surprise that triggered it.", "img": "pivot-and-ask.jpg", "spot": [72, 572, 772, 208]},
          "say": "The researcher confirms it with one click. Now the reason is on the record, linked to the surprise that triggered it."}
       ]
     },
@@ -119,22 +119,18 @@
     {
       "id": "10-evidence",
       "beats": [
-        {"slide": {"type": "shot", "kicker": "Evidence", "title": "What was *actually run*",
-                   "body": "Command, parameters, result and status, captured from the run itself.", "img": "run-evidence.jpg", "spot": [80, 468, 756, 268]},
+        {"slide": {"type": "shot", "kicker": "Evidence", "title": "What was *actually run*", "body": "Command, parameters, result and status, captured from the run itself.", "img": "run-evidence.jpg", "spot": [80, 468, 756, 268]},
          "say": "Open any run, and you see what was actually executed: the command, its parameters, and its result."},
-        {"slide": {"type": "shot", "kicker": "Evidence", "title": "One click to the *raw capture*",
-                   "body": "The exact output the hook recorded, including the line the result came from.", "img": "run-evidence.jpg", "spot": [80, 740, 756, 58]},
+        {"slide": {"type": "shot", "kicker": "Evidence", "title": "One click to the *raw capture*", "body": "The exact output the hook recorded, including the line the result came from.", "img": "run-evidence.jpg", "spot": [80, 740, 756, 58]},
          "say": "And one click further, the raw capture it came from."}
       ]
     },
     {
       "id": "11-ask",
       "beats": [
-        {"slide": {"type": "shot", "kicker": "For the reviewer", "title": "Ask the log",
-                   "body": "Someone who wasn't there asks the question from the start of this video.", "img": "pivot-and-ask.jpg", "spot": [876, 175, 362, 52]},
+        {"slide": {"type": "shot", "kicker": "For the reviewer", "title": "Ask the log", "body": "Someone who wasn't there asks the question from the start of this video.", "img": "pivot-and-ask.jpg", "spot": [876, 175, 362, 52]},
          "say": "Now, the reviewer who wasn't there can simply ask the log."},
-        {"slide": {"type": "shot", "kicker": "For the reviewer", "title": "An answer that *cites* the record",
-                   "body": "The reason, who stated it, and what triggered it. Answers cite only diary entries.", "img": "pivot-and-ask.jpg", "spot": [876, 335, 362, 282]},
+        {"slide": {"type": "shot", "kicker": "For the reviewer", "title": "An answer that *cites* the record", "body": "The reason, who stated it, and what triggered it. Answers cite only diary entries.", "img": "pivot-and-ask.jpg", "spot": [876, 335, 362, 282]},
          "say": "Why did they change approach at step four? The answer comes back with citations: the reason, stated by the researcher, and the surprise that triggered it. Answers cite only entries in the diary, so there is no invented history."}
       ]
     },
@@ -148,17 +144,13 @@
     {
       "id": "13-private",
       "beats": [
-        {"slide": {"type": "points", "dark": true, "kicker": "By design", "title": "Yours, and *local*",
-                   "items": ["Runs entirely on your machine", "Secrets are stripped before anything is stored", "Works with no model, or with Claude, OpenAI, Gemini or Ollama", "Every study saved separately"], "show": 1},
+        {"slide": {"type": "points", "dark": true, "kicker": "By design", "title": "Yours, and *local*", "items": ["Runs entirely on your machine", "Secrets are stripped before anything is stored", "Works with no model, or with Claude, OpenAI, Gemini or Ollama", "Every study saved separately"], "show": 1},
          "say": "Episteme runs entirely on your machine."},
-        {"slide": {"type": "points", "dark": true, "kicker": "By design", "title": "Yours, and *local*",
-                   "items": ["Runs entirely on your machine", "Secrets are stripped before anything is stored", "Works with no model, or with Claude, OpenAI, Gemini or Ollama", "Every study saved separately"], "show": 2},
+        {"slide": {"type": "points", "dark": true, "kicker": "By design", "title": "Yours, and *local*", "items": ["Runs entirely on your machine", "Secrets are stripped before anything is stored", "Works with no model, or with Claude, OpenAI, Gemini or Ollama", "Every study saved separately"], "show": 2},
          "say": "Secrets are stripped from captured text before anything is stored."},
-        {"slide": {"type": "points", "dark": true, "kicker": "By design", "title": "Yours, and *local*",
-                   "items": ["Runs entirely on your machine", "Secrets are stripped before anything is stored", "Works with no model, or with Claude, OpenAI, Gemini or Ollama", "Every study saved separately"], "show": 3},
+        {"slide": {"type": "points", "dark": true, "kicker": "By design", "title": "Yours, and *local*", "items": ["Runs entirely on your machine", "Secrets are stripped before anything is stored", "Works with no model, or with Claude, OpenAI, Gemini or Ollama", "Every study saved separately"], "show": 3},
          "say": "It works with no model at all, or with Claude, OpenAI, Gemini, or a local model through Ollama."},
-        {"slide": {"type": "points", "dark": true, "kicker": "By design", "title": "Yours, and *local*",
-                   "items": ["Runs entirely on your machine", "Secrets are stripped before anything is stored", "Works with no model, or with Claude, OpenAI, Gemini or Ollama", "Every study saved separately"], "show": 4},
+        {"slide": {"type": "points", "dark": true, "kicker": "By design", "title": "Yours, and *local*", "items": ["Runs entirely on your machine", "Secrets are stripped before anything is stored", "Works with no model, or with Claude, OpenAI, Gemini or Ollama", "Every study saved separately"], "show": 4},
          "say": "And every study is saved separately, so you can move between projects at any time."}
       ]
     },

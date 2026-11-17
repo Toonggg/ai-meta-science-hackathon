@@ -1,0 +1,13 @@
+{
+ "fingerprint": "9321cc37c3044cdb",
+ "text": "And the way research is done is changing. More and more analysis code is written and run by AI agents, like Claude Code, working alongside the researcher. An agent can take hundreds of actions in an afternoon. The researcher's decisions, the why behind each change, get buried in chat logs and terminal scrollback. The faster the work goes, the less of it anyone can reconstruct.",
+ "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+ "model_id": "eleven_multilingual_v2",
+ "voice_settings": {
+  "stability": 0.5,
+  "similarity_boost": 0.75,
+  "style": 0.0,
+  "use_speaker_boost": true,
+  "speed": 1.0
+ }
+}

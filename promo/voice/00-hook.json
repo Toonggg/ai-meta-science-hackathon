@@ -1,0 +1,13 @@
+{
+ "fingerprint": "e54dbab82dbfb710",
+ "text": "Picture yourself as a researcher. You want your work to be reproducible. Anyone who reads it should be able to follow what you did, and why you did it. So you keep a notebook. But you write it at the end of the day, from memory, when there's time. It records what you ran and what came out. It rarely records why you dropped one approach for another. And nothing ties a note to the exact code, run or output it describes. Months later, someone reads your paper. A reviewer, a colleague who wants to build on it, or you, a year from now. And they ask a simple question.",
+ "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+ "model_id": "eleven_multilingual_v2",
+ "voice_settings": {
+  "stability": 0.5,
+  "similarity_boost": 0.75,
+  "style": 0.0,
+  "use_speaker_boost": true,
+  "speed": 1.0
+ }
+}

@@ -1,0 +1,13 @@
+{
+ "fingerprint": "0d0bc5ee97c15784",
+ "text": "This is not a small gap. In a 2016 Nature survey of more than fifteen hundred researchers, over seventy percent said they had tried and failed to reproduce another scientist's experiments. And when a result can't be reproduced, the first question is always the same. What exactly did they do, and why?",
+ "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+ "model_id": "eleven_multilingual_v2",
+ "voice_settings": {
+  "stability": 0.5,
+  "similarity_boost": 0.75,
+  "style": 0.0,
+  "use_speaker_boost": true,
+  "speed": 1.0
+ }
+}

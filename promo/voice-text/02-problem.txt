@@ -1,1 +1,1 @@
-A paper reports the path that worked. The dead ends, the failed runs, the expectation that turned out wrong, and the moment someone said: this isn't working, let's try something else. None of that survives. Lab notebooks were meant to hold it. But they're written after the fact, from memory, if they're written at all.
+A paper reports the path that worked. The dead ends, the failed runs, the expectation that turned out wrong, and the moment someone said: this isn't working, let's try something else. None of that survives.

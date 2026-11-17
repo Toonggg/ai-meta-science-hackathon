@@ -1,23 +1,49 @@
 # Episteme promo: script
 
-About 658 words. Length with the current voice: 04:45.
+About 740 words. Length with the current voice: 05:19.
 
 Generated from `promo/scenes.json` by `promo/build.py`. Edit the JSON, not this file.
 
 To replace the voice, record one file per scene (text in `promo/voice-text/<id>.txt`), save it as
 `promo/voice/<id>.mp3` and run `python3 promo/build.py` again. See the top of `build.py`.
 
-## 01-hook (00:00 to 00:14)
+## 00-hook (00:00 to 00:38)
 
-**Slide 1** (hero): Why did they change approach at step 4?
+**Slide 1** (hero): You're a researcher. You want your work to be reproducible.
 
-> Why did they change approach at step four?
+> Picture yourself as a researcher. You want your work to be reproducible.
 
-**Slide 2** (hero): Why did they change approach at step 4?
+**Slide 2** (hero): You're a researcher. You want your work to be reproducible.
 
-> It's the simplest question a reviewer can ask about a study. And most of the time, nobody can answer it. Not even the people who did the work.
+> Anyone who reads it should be able to follow what you did, and why you did it.
 
-## 02-problem (00:14 to 00:36)
+**Slide 3** (points): So you keep a notebook. It records what, rarely why.
+
+> So you keep a notebook. But you write it at the end of the day, from memory, when there's time.
+
+**Slide 4** (points): So you keep a notebook. It records what, rarely why.
+
+> It records what you ran and what came out. It rarely records why you dropped one approach for another.
+
+**Slide 5** (points): So you keep a notebook. It records what, rarely why.
+
+> And nothing ties a note to the exact code, run or output it describes.
+
+**Slide 6** (hero): Months later, someone reads your paper.
+
+> Months later, someone reads your paper. A reviewer, a colleague who wants to build on it, or you, a year from now. And they ask a simple question.
+
+## 01-hook (00:38 to 00:50)
+
+**Slide 1** (hero): Why did you change approach halfway through?
+
+> Why did you change approach halfway through?
+
+**Slide 2** (hero): Why did you change approach halfway through?
+
+> It sounds simple. But most of the time, nobody can answer it accurately. Not even the people who did the work.
+
+## 02-problem (00:50 to 01:05)
 
 **Slide 1** (points): Research keeps its results. It loses its reasons.
 
@@ -27,11 +53,7 @@ To replace the voice, record one file per scene (text in `promo/voice-text/<id>.
 
 > The dead ends, the failed runs, the expectation that turned out wrong, and the moment someone said: this isn't working, let's try something else. None of that survives.
 
-**Slide 3** (points): Research keeps its results. It loses its reasons.
-
-> Lab notebooks were meant to hold it. But they're written after the fact, from memory, if they're written at all.
-
-## 03-reproducibility (00:36 to 00:58)
+## 03-reproducibility (01:05 to 01:27)
 
 **Slide 1** (stat): 
 
@@ -41,7 +63,7 @@ To replace the voice, record one file per scene (text in `promo/voice-text/<id>.
 
 > And when a result can't be reproduced, the first question is always the same. What exactly did they do, and why?
 
-## 04-agents (00:58 to 01:24)
+## 04-agents (01:27 to 01:55)
 
 **Slide 1** (stream): The work is now done with AI agents
 
@@ -55,7 +77,7 @@ To replace the voice, record one file per scene (text in `promo/voice-text/<id>.
 
 > The faster the work goes, the less of it anyone can reconstruct.
 
-## 05-meet (01:24 to 01:39)
+## 05-meet (01:55 to 02:10)
 
 **Slide 1** (hero): Episteme
 
@@ -65,7 +87,7 @@ To replace the voice, record one file per scene (text in `promo/voice-text/<id>.
 
 > It records what was planned, what was run, what happened, and why the approach changed. While the work happens, not afterwards.
 
-## 06-capture (01:39 to 02:13)
+## 06-capture (02:10 to 02:45)
 
 **Slide 1** (flow): Capture everything. Keep the decisions.
 
@@ -79,7 +101,7 @@ To replace the voice, record one file per scene (text in `promo/voice-text/<id>.
 
 > The raw log keeps everything. The diary keeps only what a reviewer needs, and every diary entry points back to the raw evidence behind it.
 
-## 07-timeline (02:13 to 02:47)
+## 07-timeline (02:45 to 03:18)
 
 **Slide 1** (shot): A study, step by step [screenshot: timeline.jpg]
 
@@ -97,7 +119,7 @@ To replace the voice, record one file per scene (text in `promo/voice-text/<id>.
 
 > Step three: Episteme notices, on its own, that the result contradicts the expectation, and records a surprise. Nobody had to write it down.
 
-## 08-pivot (02:47 to 03:17)
+## 08-pivot (03:18 to 03:49)
 
 **Slide 1** (shot): A change of approach asks why [screenshot: timeline.jpg]
 
@@ -111,13 +133,13 @@ To replace the voice, record one file per scene (text in `promo/voice-text/<id>.
 
 > The researcher confirms it with one click. Now the reason is on the record, linked to the surprise that triggered it.
 
-## 09-attribution (03:17 to 03:30)
+## 09-attribution (03:49 to 04:03)
 
 **Slide 1** (badges): Every entry says who stated it
 
 > Every entry carries a badge: stated by the researcher, stated by the agent, or inferred by Episteme's own rules. So a reviewer always knows how much weight each line can bear.
 
-## 10-evidence (03:30 to 03:42)
+## 10-evidence (04:03 to 04:16)
 
 **Slide 1** (shot): What was actually run [screenshot: run-evidence.jpg]
 
@@ -127,7 +149,7 @@ To replace the voice, record one file per scene (text in `promo/voice-text/<id>.
 
 > And one click further, the raw capture it came from.
 
-## 11-ask (03:42 to 04:02)
+## 11-ask (04:16 to 04:36)
 
 **Slide 1** (shot): Ask the log [screenshot: pivot-and-ask.jpg]
 
@@ -137,13 +159,13 @@ To replace the voice, record one file per scene (text in `promo/voice-text/<id>.
 
 > Why did they change approach at step four? The answer comes back with citations: the reason, stated by the researcher, and the surprise that triggered it. Answers cite only entries in the diary, so there is no invented history.
 
-## 12-export (04:02 to 04:13)
+## 12-export (04:36 to 04:48)
 
 **Slide 1** (doc): The decision record, ready for the paper
 
 > When it's time to publish, export the record as a Markdown decision appendix for your paper, or as W3C PROV-JSON for provenance tools.
 
-## 13-private (04:13 to 04:35)
+## 13-private (04:48 to 05:10)
 
 **Slide 1** (points): Yours, and local
 
@@ -161,7 +183,7 @@ To replace the voice, record one file per scene (text in `promo/voice-text/<id>.
 
 > And every study is saved separately, so you can move between projects at any time.
 
-## 14-close (04:35 to 04:45)
+## 14-close (05:10 to 05:19)
 
 **Slide 1** (hero): Research moves faster than ever. Episteme keeps the documentation with it.
 

@@ -1,0 +1,13 @@
+{
+ "fingerprint": "0701639518181c72",
+ "text": "Why did you change approach at step four? It sounds simple. But most of the time, nobody can answer it accurately. Not even the people who did the work.",
+ "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
+ "model_id": "eleven_multilingual_v2",
+ "voice_settings": {
+  "stability": 0.5,
+  "similarity_boost": 0.75,
+  "style": 0.0,
+  "use_speaker_boost": true,
+  "speed": 1.0
+ }
+}
