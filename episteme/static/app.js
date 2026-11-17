@@ -89,7 +89,8 @@ async function loadStatus() {
   sb.classList.toggle("warn", src.up > 0 && src.up < src.enabled);
   sb.classList.toggle("bad", src.available && src.up === 0 && src.sources.some((x) => x.enabled && x.last_check));
   sb.title = "Search sources: click for live status and manual checks";
-  $("#tier-src").textContent = src.available ? `${src.up}/${src.enabled} online · status` : "all off · configure";
+  const tierSrc = $("#tier-src"); // Task 1 panel: absent in the Task 2-only page
+  if (tierSrc) tierSrc.textContent = src.available ? `${src.up}/${src.enabled} online · status` : "all off · configure";
   $("#use-search").disabled = !src.available;
   $("#use-search").checked = src.available && localStorage.getItem("useSearch") !== "0";
   // One header pill summarises both capabilities; the details live in the menu it opens.
@@ -101,8 +102,8 @@ async function loadStatus() {
 }
 const useSearch = () => $("#use-search").checked;
 function syncTiers() {
-  $('#tiers [data-tier="search"]').classList.toggle("off", !useSearch());
-  $('#tiers [data-tier="ai"]').classList.toggle("off", !useAI());
+  $('#tiers [data-tier="search"]')?.classList.toggle("off", !useSearch());
+  $('#tiers [data-tier="ai"]')?.classList.toggle("off", !useAI());
 }
 $("#use-ai").addEventListener("change", (e) => { localStorage.setItem("useAI", e.target.checked ? "1" : "0"); syncTiers(); });
 $("#use-search").addEventListener("change", (e) => { localStorage.setItem("useSearch", e.target.checked ? "1" : "0"); syncTiers(); });
@@ -286,29 +287,15 @@ $("#st-check-all").addEventListener("click", async (e) => {
 });
 
 // ---------------------------------------------------------------- diary
-async function loadDiary(focusNew = false) {
+async function loadDiary() {
   const snap = await api("/api/events");
   state.events = snap.events;
   state.demo = snap.demo;
   state.sig = snap.events.map((e) => `${e.id}:${e.ts}:${e.step}:${e.status || ""}:${e.confirmation || ""}:${e.title}`).join("|");
   $("#project-name").textContent = snap.project || "Research diary";
-
-  // Remove the load alphafold demo button in the top header once already in a demo project
-  const isDemo = Boolean(snap.demo);
-  const quickDemoBtn = $("#quick-demo-btn");
-  if (quickDemoBtn) quickDemoBtn.hidden = isDemo;
-  const hdrReplayBtn = $("#hdr-replay-btn");
-  if (hdrReplayBtn) {
-    hdrReplayBtn.hidden = !isDemo;
-    hdrReplayBtn.textContent = snap.demo === "hospital-readmission" ? "▶ Replay Hospital Demo" : "▶ Replay AlphaFold Demo";
-  }
-  const tlReplayBtn = $("#tl-replay-btn");
-  if (tlReplayBtn) {
-    tlReplayBtn.textContent = snap.demo === "hospital-readmission" ? "▶ Replay Hospital Demo" : "▶ Replay Session";
-  }
-
+  $("#tl-replay-btn").hidden = !snap.demo || replay.active;
+  if (replay.active) snap.events.forEach((e) => { if (!replay.seen.has(e.id)) replay.hold.add(e.id); }); // the replay reveals these one by one
   renderTimeline();
-  if (focusNew) focusLatestStep();
 }
 
 // Who stated it: a short badge, the full sentence (from the server) on hover.
@@ -377,30 +364,12 @@ function renderTimeline() {
   tl.hidden = view === "raw";
   $("#raw-view").hidden = view !== "raw";
   if (view === "raw") return renderRaw();
-  const shown = view === "decisions" ? state.events.filter(isDecision) : state.events;
+  const visible = replay.hold.size ? state.events.filter((e) => !replay.hold.has(e.id)) : state.events;
+  const shown = view === "decisions" ? visible.filter(isDecision) : visible;
   tl.innerHTML = shown.length ? shown.map(evCard).join("") : state.events.length
     ? `<li class="empty">No decisions yet. Switch to All to see every event.</li>`
     : `<li class="empty">Empty diary. Add a plan above, or stress-test a question in step 1 and start from there.</li>`;
   renderCaptureStatus();
-}
-
-function focusLatestStep() {
-  let target = null;
-  if (view === "raw") {
-    const rawCards = $$("#raw-view .card");
-    if (rawCards.length) target = rawCards[rawCards.length - 1];
-  } else {
-    const list = $$("#timeline li.ev");
-    if (list.length) target = list[list.length - 1];
-  }
-  if (target) {
-    target.scrollIntoView({ behavior: "smooth", block: "center" });
-    target.classList.remove("highlight-pulse");
-    void target.offsetWidth;
-    target.classList.add("highlight-pulse");
-    target.setAttribute("tabindex", "-1");
-    target.focus({ preventScroll: true });
-  }
 }
 
 $("#view-pick").addEventListener("click", (e) => {
@@ -667,32 +636,12 @@ $("#ask-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const q = $("#ask-input").value.trim() || $("#ask-input").placeholder;
   $("#ask-input").value = q;
-  const reviewerCard = $(".reviewer-card");
-  if (reviewerCard) {
-    reviewerCard.scrollIntoView({ behavior: "smooth", block: "center" });
-    reviewerCard.classList.remove("highlight-pulse");
-    void reviewerCard.offsetWidth;
-    reviewerCard.classList.add("highlight-pulse");
-  }
   busy($("#ask-form button"), async () => {
     const res = await api("/api/ask", { question: q, use_ai: useAI() });
     $("#ask-out").innerHTML = `<div class="answer">${md(res.answer)}</div>${modeNote(res)}`;
     $("#ask-out").scrollIntoView({ behavior: "smooth", block: "nearest" });
-    const ans = $("#ask-out .answer");
-    if (ans) {
-      ans.classList.add("highlight-pulse");
-      ans.setAttribute("tabindex", "-1");
-      ans.focus({ preventScroll: true });
-    }
   });
 });
-const goldenBtn = $("#golden-test-btn");
-if (goldenBtn) {
-  goldenBtn.addEventListener("click", () => {
-    $("#ask-input").value = "Why did they change approach at step 4?";
-    $("#ask-form").requestSubmit();
-  });
-}
 
 // ---------------------------------------------------------------- start screen
 // Shown once each time Episteme starts (the token changes per start), and from the logo.
@@ -700,38 +649,16 @@ const START_SEEN = "episteme-start-seen";
 function startSeen() { try { return sessionStorage.getItem(START_SEEN) === TOKEN; } catch { return false; } }
 function markStartSeen() { try { sessionStorage.setItem(START_SEEN, TOKEN); } catch { /* private mode: show it again next load */ } }
 
-let selectedDemoId = "alphafold";
-
-function selectDemo(demoId) {
-  selectedDemoId = demoId;
-  $$("#start-demos .start-demo").forEach((b) => {
-    b.classList.toggle("selected", b.dataset.demo === demoId);
-  });
-  const isAlpha = demoId === "alphafold";
-  const cmd = `python3 tools/replay.py demo/${demoId}.jsonl --speed 15`;
-  const codeEl = $("#replay-cmd-code");
-  if (codeEl) codeEl.textContent = cmd;
-  const tagEl = $("#replay-selected-tag");
-  if (tagEl) tagEl.textContent = isAlpha ? "AlphaFold 2" : "Hospital Readmission";
-  const replayBtn = $("#start-replay-btn");
-  if (replayBtn) replayBtn.textContent = isAlpha ? "▶ Run Live Replay in Webpage" : "▶ Run Live Replay: Hospital Readmission";
-  const loadBtn = $("#start-load-btn");
-  if (loadBtn) loadBtn.textContent = isAlpha ? "⚡ Load Instantly" : "⚡ Load Hospital Instantly";
-}
-
 async function openStart() {
   const [{ demos, current }, snap] = await Promise.all([api("/api/demos"), api("/api/events")]);
   const n = snap.events.length;
   const cont = $("#start-continue");
   cont.hidden = !n;
   cont.innerHTML = n ? `<b>Continue: ${esc(snap.project || "current study")}</b><small>${n} ${n === 1 ? "entry" : "entries"}${current ? " · demo" : ""}</small>` : "";
-  $("#start-demos").innerHTML = demos.map((d) => {
-    const isFeatured = d.id === "alphafold";
-    return `<button type="button" class="start-demo ${isFeatured ? "featured-demo" : ""}" data-demo="${esc(d.id)}" id="start-demo-${esc(d.id)}" title="Click to select ${esc(d.title)}">
-      ${isFeatured ? '<div class="demo-badge-row"><span class="badge featured-badge">⭐ Task 2 Featured Demo</span><span class="badge-sub">Step 4 Pivot</span></div>' : ""}
-      <b>${esc(d.title)}</b><span class="muted">${esc(d.summary)}</span></button>`;
-  }).join("");
-  selectDemo(snap.demo || selectedDemoId || "alphafold");
+  $("#start-demos").innerHTML = demos.map((d) => `<div class="start-demo-row">
+      <button type="button" class="start-demo" data-demo="${esc(d.id)}"><b>${esc(d.title)}</b><span class="muted">${esc(d.summary)}</span></button>
+      <button type="button" class="replay" data-replay="${esc(d.id)}" title="Watch the diary being written, one entry at a time">▶ Replay</button>
+    </div>`).join("");
   const warn = $("#start-warn");
   warn.hidden = !n;
   warn.textContent = n ? `Starting a notebook or loading a demo replaces the current diary (${n} ${n === 1 ? "entry" : "entries"}) and its raw capture. Export it first to keep it.` : "";
@@ -747,101 +674,69 @@ function closeStart() {
   showTab("diary");
 }
 
-let replayActive = false;
-let replayAborted = false;
+// Live replay of a demo: the server feeds the session's raw capture one line at a time
+// (/api/demo/step) and the page reveals each diary entry the stitcher writes, one at a time.
+// Many raw lines write nothing (an episode is only stitched once it is finished), and one line
+// can finish an episode that writes several entries, so the pace is set per entry, not per line.
+// ?pace=2 in the URL makes it twice as slow (for screen recordings), ?pace=0.5 twice as fast.
+const replay = { active: false, fast: false, hold: new Set(), seen: new Set() };
+const REPLAY_MS = { plan: 3000, run: 3000, surprise: 4000, pivot: 5000, note: 3500, question: 3500, artifact: 2500 };
+const replayPace = (() => { const p = parseFloat(new URLSearchParams(location.search).get("pace")); return p > 0 ? p : 1; })();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function revealEntry(id) {
+  replay.hold.delete(id);
+  const open = $$(".ev.open").map((el) => el.dataset.id);
+  renderTimeline();
+  open.forEach((x) => $("#ev-" + x)?.classList.add("open"));
+  const li = $("#ev-" + id);
+  if (!li) return; // hidden by the Decisions view
+  li.classList.add("arrived");
+  li.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  setTimeout(() => li.classList.add("settled"), 800);
+}
 
 async function runLiveReplay(demoId) {
-  demoId = demoId || selectedDemoId || "alphafold";
-  if (replayActive) return;
-  replayActive = true;
-  replayAborted = false;
-
-  closeStart();
-  showTab("diary");
-
-  const isAlpha = demoId === "alphafold";
-  const demoTitle = isAlpha ? "AlphaFold 2" : "Hospital Readmission";
-
-  const banner = $("#replay-banner");
-  const bannerText = $("#replay-banner-text");
-  const bannerProgress = $("#replay-progress");
-  const skipBtn = $("#replay-skip-btn");
-
-  if (banner) {
-    banner.hidden = false;
-    bannerText.innerHTML = `<strong>Replaying ${demoTitle} capture session</strong> (live demonstration)...`;
-    bannerProgress.textContent = "initializing...";
-  }
-
-  const finishReplay = () => {
-    if (bannerText) bannerText.innerHTML = "<strong>Replay complete!</strong> Press Ask to audit the Step 4 pivot.";
-    if (bannerProgress) bannerProgress.textContent = "11 events active";
-    toast(`${demoTitle} replay complete! Notice the pivot at Step 4.`);
-    setTimeout(() => { if (banner) banner.hidden = true; }, 4500);
-
-    // Switch focus smoothly to the Auditor Station
-    const reviewerCard = $(".reviewer-card");
-    if (reviewerCard) {
-      reviewerCard.scrollIntoView({ behavior: "smooth", block: "center" });
-      reviewerCard.classList.remove("highlight-pulse");
-      void reviewerCard.offsetWidth;
-      reviewerCard.classList.add("highlight-pulse");
-      reviewerCard.setAttribute("tabindex", "-1");
-      reviewerCard.focus({ preventScroll: true });
-    }
-    $("#ask-input").value = "Why did they change approach at step 4?";
-  };
-
-  const onSkip = async () => {
-    replayAborted = true;
-    if (bannerProgress) bannerProgress.textContent = "fast-forwarding...";
-    try {
-      await api("/api/demo", { id: demoId });
-      await afterNewStudy();
-      focusLatestStep();
-      finishReplay();
-    } catch (err) {
-      toast("Error: " + err.message);
-    }
-  };
-  if (skipBtn) skipBtn.onclick = onSkip;
-
+  if (replay.active || !demoId) return;
+  Object.assign(replay, { active: true, fast: false });
+  replay.hold.clear();
+  replay.seen.clear();
+  const status = $("#replay-status"), progress = $("#replay-progress");
+  $("#tl-replay-btn").hidden = true;
+  status.hidden = false;
+  progress.textContent = "Replaying…";
+  let shown = 0;
   try {
-    const init = await api("/api/demo/step", { id: demoId, step: 0, reset: true });
-    await afterNewStudy();
-    focusLatestStep();
-    const total = init.total || 15;
-
-    for (let i = 0; i < total; i++) {
-      if (replayAborted) break;
-      const stepNum = i + 1;
-      if (bannerProgress) bannerProgress.textContent = `step ${stepNum} of ${total}`;
-
-      const prevCount = state.events ? state.events.length : 0;
-      if (i > 0) {
-        await api("/api/demo/step", { id: demoId, step: i });
-        await Promise.all([loadDiary(), loadConfirms(), refreshCapture()]);
+    let step = 0, total = 1;
+    while (step < total) {
+      const r = await api("/api/demo/step", { id: demoId, step, reset: step === 0 });
+      total = r.total;
+      if (step === 0) await afterNewStudy(); // closes the start screen, shows the emptied diary
+      await loadDiary();
+      const fresh = state.events.filter((e) => !replay.seen.has(e.id));
+      fresh.forEach((e) => replay.seen.add(e.id));
+      for (const e of fresh) {
+        revealEntry(e.id);
+        shown += 1;
+        progress.textContent = `Replaying · ${shown} ${shown === 1 ? "entry" : "entries"}`;
+        if (!replay.fast) await sleep((REPLAY_MS[e.type] || 3000) * replayPace);
       }
-
-      // Switch screen focus whenever a step is loaded from the demo
-      focusLatestStep();
-
-      const newCount = state.events ? state.events.length : 0;
-      // Paced replay: 950ms when a new card is emitted, 700ms for internal turn steps
-      const delay = newCount > prevCount ? 950 : 700;
-      await new Promise((r) => setTimeout(r, delay));
+      if (!fresh.length && !replay.fast) await sleep(250 * replayPace); // raw lines that write nothing yet
+      step += 1;
     }
-
-    if (!replayAborted) {
-      finishReplay();
-    }
+    await Promise.all([loadConfirms(), refreshCapture()]);
+    if (!$("#ask-input").value) $("#ask-input").value = "Why did they change approach at step 4?";
   } catch (e) {
-    toast("Live replay error: " + e.message);
-    if (banner) banner.hidden = true;
+    toast("Replay stopped: " + e.message);
   } finally {
-    replayActive = false;
+    replay.active = false;
+    replay.hold.clear();
+    status.hidden = true;
+    await loadDiary().catch(() => {});
   }
 }
+$("#replay-skip-btn").addEventListener("click", () => { replay.fast = true; });
+$("#tl-replay-btn").addEventListener("click", () => runLiveReplay(state.demo));
 
 async function afterNewStudy() { // a different diary: drop what the page showed for the old one
   $("#prompts").innerHTML = ""; $("#ask-out").innerHTML = "";
@@ -865,93 +760,16 @@ $("#start-new").addEventListener("submit", (e) => {
   });
 });
 $("#start-demos").addEventListener("click", (e) => {
+  const rb = e.target.closest("[data-replay]");
+  if (rb) return runLiveReplay(rb.dataset.replay);
   const b = e.target.closest("[data-demo]");
   if (!b) return;
-  selectDemo(b.dataset.demo);
+  busy(b, async () => {
+    const r = await api("/api/demo", { id: b.dataset.demo });
+    await afterNewStudy();
+    toast(`Demo loaded: ${r.events} entries. Ask the log why they changed approach.`);
+  });
 });
-
-const startLoadBtn = $("#start-load-btn");
-if (startLoadBtn) {
-  startLoadBtn.addEventListener("click", () => {
-    busy(startLoadBtn, async () => {
-      const demoId = selectedDemoId || "alphafold";
-      const r = await api("/api/demo", { id: demoId });
-      await afterNewStudy();
-      focusLatestStep();
-      const isAlpha = demoId === "alphafold";
-      const demoTitle = isAlpha ? "AlphaFold 2" : "Hospital Readmission";
-      toast(`${demoTitle} loaded: ${r.events} entries. Press ▶ Replay to watch it step-by-step, or click Ask to audit.`);
-      $("#ask-input").value = "Why did they change approach at step 4?";
-    });
-  });
-}
-
-const startReplayBtn = $("#start-replay-btn");
-if (startReplayBtn) {
-  startReplayBtn.addEventListener("click", () => runLiveReplay(selectedDemoId));
-}
-
-const hdrReplayBtn = $("#hdr-replay-btn");
-if (hdrReplayBtn) {
-  hdrReplayBtn.addEventListener("click", () => runLiveReplay(state.demo || selectedDemoId || "alphafold"));
-}
-
-const tlReplayBtn = $("#tl-replay-btn");
-if (tlReplayBtn) {
-  tlReplayBtn.addEventListener("click", () => runLiveReplay(state.demo || selectedDemoId || "alphafold"));
-}
-
-const replayCodeBtn = $("#replay-code-btn");
-if (replayCodeBtn) {
-  replayCodeBtn.addEventListener("click", async () => {
-    const cmd = `python3 tools/replay.py demo/${selectedDemoId}.jsonl --speed 15`;
-    try {
-      await navigator.clipboard.writeText(cmd);
-      toast("Replay command copied! Press ▶ Run Live Replay below to watch in browser.");
-    } catch {
-      toast("Command: " + cmd);
-    }
-    const btn = $("#start-replay-btn");
-    if (btn) {
-      btn.classList.add("highlight-pulse");
-      setTimeout(() => btn.classList.remove("highlight-pulse"), 1200);
-    }
-  });
-  replayCodeBtn.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      $("#start-replay-btn")?.click();
-    }
-  });
-}
-
-const copyReplayBtn = $("#copy-replay-btn");
-if (copyReplayBtn) {
-  copyReplayBtn.addEventListener("click", async (e) => {
-    e.stopPropagation();
-    const cmd = `python3 tools/replay.py demo/${selectedDemoId}.jsonl --speed 15`;
-    try {
-      await navigator.clipboard.writeText(cmd);
-      toast("Copied: " + cmd);
-    } catch {
-      toast("Command: " + cmd);
-    }
-  });
-}
-
-const quickDemoBtn = $("#quick-demo-btn");
-if (quickDemoBtn) {
-  quickDemoBtn.addEventListener("click", () => {
-    closeStart();
-    busy(quickDemoBtn, async () => {
-      const r = await api("/api/demo", { id: "alphafold" });
-      await afterNewStudy();
-      focusLatestStep();
-      toast("AlphaFold 2 demo loaded. Press ▶ Replay to watch it step-by-step, or click Ask to audit.");
-      $("#ask-input").value = "Why did they change approach at step 4?";
-    });
-  });
-}
 $("#start-continue").addEventListener("click", closeStart);
 $("#open-start").addEventListener("click", () => openStart().catch((e) => toast("Error: " + e.message)));
 $("#new-study").addEventListener("click", () => openStart().catch((e) => toast("Error: " + e.message)));
@@ -1167,6 +985,7 @@ function renderClaims(r) {
   if (["question", "diary", "claims"].includes(tab)) showTab(tab);
   await openStart().catch(() => {});
   setInterval(async () => { // pick up events from capture hooks, the stitcher and other tools
+    if (replay.active) return; // the replay loads and reveals entries itself
     const snap = await api("/api/events").catch(() => null);
     if (snap && snap.events) {
       const sig = snap.events.map((e) => `${e.id}:${e.ts}:${e.step}:${e.status || ""}:${e.confirmation || ""}:${e.title}`).join("|");

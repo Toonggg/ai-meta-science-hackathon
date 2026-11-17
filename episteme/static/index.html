@@ -18,14 +18,6 @@
     <img src="/favicon.svg" width="26" height="26" alt="Episteme logo" class="brand-logo-img">
     <span><strong>Episteme</strong><small>a flight recorder for AI-assisted research</small></span>
   </button>
-  <div class="task-badge" id="task-badge" title="AI4MetaScience Hackathon · Task 2 Focus">
-    <span class="pulse-dot"></span>
-    <span><strong>Task 2 MVP:</strong> Provenance Lab Notebook</span>
-  </div>
-  <div class="hdr-actions">
-    <button type="button" class="btn ghost small quick-demo-btn" id="quick-demo-btn" title="Load the AlphaFold 2 discovery demo">⚡ Load AlphaFold Demo</button>
-    <button type="button" class="btn primary small hdr-replay-btn" id="hdr-replay-btn" title="Replay AlphaFold 2 session live step-by-step">▶ Replay Demo</button>
-  </div>
   <details class="ai hdr-menu" id="hdr-menu">
     <summary class="badge" id="hdr-sum" title="Model, search and theme">…</summary>
     <div class="menu">
@@ -52,12 +44,9 @@
 <section id="start" aria-labelledby="start-title">
   <div class="start-inner">
     <div class="start-head">
-      <div class="start-icon-wrap">
-        <img src="/favicon.svg" width="60" height="60" alt="Episteme nano-banana logo" class="start-logo-img">
-      </div>
+      <img src="/favicon.svg" width="56" height="56" alt="" class="start-logo-img">
       <h1 id="start-title">Episteme</h1>
-      <p class="start-sub"><strong>AI4MetaScience Hackathon · Task 2 MVP</strong></p>
-      <p class="muted">A provenance-preserving flight recorder for AI-assisted research. Captures plans, runs, surprises, and pivots so any reviewer can answer: <em>"Why did they change approach at step 4?"</em></p>
+      <p class="muted">A flight recorder for AI-assisted research. Start a study notebook, or explore a demo.</p>
     </div>
     <button type="button" id="start-continue" class="card start-continue" hidden></button>
     <div class="start-grid">
@@ -71,35 +60,7 @@
       <div class="card start-card">
         <h2>Load a demo</h2>
         <p class="muted">A simulated study captured as a real session would be, with a change of approach at step 4. Ask the log why.</p>
-        <div id="start-demos" class="start-demos">
-          <button type="button" class="start-demo featured-demo selected" data-demo="alphafold" id="start-demo-alphafold" title="Click to select AlphaFold 2 discovery demo">
-            <div class="demo-badge-row">
-              <span class="badge featured-badge">⭐ Task 2 Featured Demo</span>
-              <span class="badge-sub">Step 4 Pivot</span>
-            </div>
-            <b>AlphaFold 2 discovery (CASP14)</b>
-            <span class="muted">11 steps · PDB distograms fail at GDT 62 → end-to-end attention with Evoformer hits GDT 92.4</span>
-          </button>
-          <button type="button" class="start-demo" data-demo="hospital-readmission" id="start-demo-hospital-readmission" title="Click to select hospital readmission model demo">
-            <b>Hospital readmission risk model</b>
-            <span class="muted">11 steps · XGBoost baseline overfits on site id → temporal split with clinical embeddings</span>
-          </button>
-        </div>
-        <div class="start-replay-box" id="start-replay-box">
-          <div class="replay-head">
-            <span class="replay-label">⚡ <strong>Live Replay (tools/replay.py)</strong></span>
-            <span class="replay-tag" id="replay-selected-tag">AlphaFold 2</span>
-          </div>
-          <div class="replay-code-row" id="replay-code-btn" role="button" tabindex="0" title="Click to copy replay command">
-            <code id="replay-cmd-code">python3 tools/replay.py demo/alphafold.jsonl --speed 15</code>
-            <span class="run-badge" id="replay-run-badge">📋 Copy Command</span>
-          </div>
-          <div class="replay-actions">
-            <button type="button" class="btn primary small replay-web-btn" id="start-replay-btn">▶ Run Live Replay in Webpage</button>
-            <button type="button" class="btn secondary small" id="start-load-btn" title="Load the selected demo study immediately">⚡ Load Instantly</button>
-            <button type="button" class="btn ghost small" id="copy-replay-btn">📋 Copy</button>
-          </div>
-        </div>
+        <div id="start-demos" class="start-demos"></div>
       </div>
     </div>
     <p class="muted small start-warn" id="start-warn" hidden></p>
@@ -114,21 +75,6 @@
         <div class="intro">
           <h2 id="project-name">Research diary</h2>
           <p>Plans, runs, surprises and pivots, with the <i>why</i>. The badge on each entry says who stated it: the researcher, the agent, or Episteme's own inference (lower trust).</p>
-        </div>
-        <div class="attribution-legend">
-          <span class="legend-item"><span class="chip t-question">Question</span> Vetted question</span>
-          <span class="legend-item"><span class="chip t-plan">Plan</span> Expected metric</span>
-          <span class="legend-item"><span class="chip t-run">Run</span> Code &amp; params</span>
-          <span class="legend-item"><span class="chip t-surprise">Surprise</span> Contradiction</span>
-          <span class="legend-item"><span class="chip t-pivot">Pivot</span> Approach shift</span>
-          <span class="legend-item"><span class="chip t-artifact">Artifact</span> Commit</span>
-          <span class="legend-item"><span class="chip t-note">Note</span> Caveat / thought</span>
-          <span class="legend-sep">|</span>
-          <span class="legend-item"><span class="prov">researcher</span> Stated</span>
-          <span class="legend-item"><span class="prov">agent</span> Verbatim quote</span>
-          <span class="legend-item"><span class="prov inferred">inferred</span> Rule / LLM</span>
-          <span class="legend-item"><span class="prov pending">pending</span> Needs approval</span>
-          <span class="legend-item"><span class="status-failed">failed</span> Error status</span>
         </div>
         <form id="add-form" class="card add">
           <div class="row">
@@ -153,22 +99,15 @@
         </form>
         <div id="prompts"></div>
         <div id="confirms"></div>
-        <div id="replay-banner" class="replay-banner" hidden>
-          <div class="replay-banner-content">
-            <span class="pulse-dot"></span>
-            <span id="replay-banner-text"><strong>Replaying AlphaFold 2 capture session</strong> (live demonstration)...</span>
-            <span id="replay-progress" class="replay-progress-count"></span>
-          </div>
-          <button type="button" id="replay-skip-btn" class="btn small">⚡ Skip to End</button>
-        </div>
         <div class="tl-head">
           <div class="dlg-tabs" id="view-pick">
             <button type="button" data-view="all" class="active">All</button>
             <button type="button" data-view="decisions" title="Plans, pivots, surprises, notes and failed runs">Decisions</button>
             <button type="button" data-view="raw" title="Everything the capture hooks recorded, grouped into episodes">Raw capture</button>
           </div>
-          <button type="button" class="btn small primary-outline replay-diary-btn" id="tl-replay-btn" title="Replay the session step-by-step">▶ Replay Session</button>
           <span class="muted small" id="capture-status"></span>
+          <button type="button" class="btn replay-btn" id="tl-replay-btn" title="Watch this demo diary being written, one entry at a time" hidden>▶ Replay</button>
+          <span class="muted small" id="replay-status" hidden><span id="replay-progress"></span><button type="button" id="replay-skip-btn">Skip</button></span>
         </div>
         <div id="raw-view" hidden></div>
         <ol id="timeline"></ol>
@@ -176,10 +115,8 @@
 
       <aside class="col-side">
         <div class="card reviewer-card">
-          <div class="reviewer-badge">Auditor Station · Task 2</div>
           <h3>Reviewer: ask the log</h3>
           <p class="muted">Answers cite only diary events, like a reviewer who wasn't there would need.</p>
-          <button type="button" class="golden-test-btn" id="golden-test-btn">🎯 Test Question: "Why did they change approach at step 4?"</button>
           <form id="ask-form" class="row">
             <input id="ask-input" placeholder="Why did they change approach at step 4?" autocomplete="off">
             <button class="primary">Ask</button>
@@ -190,7 +127,7 @@
         <details class="card tools" open>
           <summary>Export and capture (W3C PROV-JSON)</summary>
           <div class="btns">
-            <a class="btn primary-outline" href="/api/export?format=prov" title="W3C Provenance standard JSON">W3C PROV-JSON</a>
+            <a class="btn" href="/api/export?format=prov" title="W3C Provenance standard JSON">W3C PROV-JSON</a>
             <a class="btn" href="/api/export?format=md" title="Paper decision appendix in Markdown">Decision appendix (.md)</a>
             <a class="btn" href="/api/export?format=json" title="Raw diary JSON">Raw JSON</a>
           </div>

@@ -72,7 +72,7 @@ def add_note(url, line):
     latest run when it says "about": "last_run"), as episteme/demos.py does."""
     post(url, "/api/stitch", {}, timeout=600)
     t = line.get("kind") or "note"
-    ev = {"type": t, "source": "manual" if t == "note" else "episteme", "title": line.get("title", ""), "detail": line.get("detail", ""), "actor": "human", "provenance": "stated"}
+    ev = {"type": t, "source": "manual", "title": line.get("title", ""), "detail": line.get("detail", ""), "actor": "human", "provenance": "stated"}
     if line.get("ts"):
         ev["ts"] = line["ts"]
     if line.get("about") == "last_run":

@@ -73,7 +73,7 @@ def chunks(lines):
 def note_event(line, events):
     """The diary event for a note or question line, given the diary as it stands when it is added."""
     t = line.get("kind") or "note"
-    ev = {"type": t, "source": "manual" if t == "note" else "episteme", "title": line.get("title", ""), "detail": line.get("detail", "")}
+    ev = {"type": t, "source": "manual", "title": line.get("title", ""), "detail": line.get("detail", "")}
     if line.get("actor"):
         ev["actor"] = line["actor"]
     elif t in ("note", "question"):
