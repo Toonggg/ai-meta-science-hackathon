@@ -1,6 +1,6 @@
 # Episteme promo: script
 
-About 658 words. Length with the current voice: 04:44.
+About 658 words. Length with the current voice: 04:45.
 
 Generated from `promo/scenes.json` by `promo/build.py`. Edit the JSON, not this file.
 
@@ -97,7 +97,7 @@ To replace the voice, record one file per scene (text in `promo/voice-text/<id>.
 
 > Step three: Episteme notices, on its own, that the result contradicts the expectation, and records a surprise. Nobody had to write it down.
 
-## 08-pivot (02:47 to 03:16)
+## 08-pivot (02:47 to 03:17)
 
 **Slide 1** (shot): A change of approach asks why [screenshot: timeline.jpg]
 
@@ -111,13 +111,13 @@ To replace the voice, record one file per scene (text in `promo/voice-text/<id>.
 
 > The researcher confirms it with one click. Now the reason is on the record, linked to the surprise that triggered it.
 
-## 09-attribution (03:16 to 03:29)
+## 09-attribution (03:17 to 03:30)
 
 **Slide 1** (badges): Every entry says who stated it
 
 > Every entry carries a badge: stated by the researcher, stated by the agent, or inferred by Episteme's own rules. So a reviewer always knows how much weight each line can bear.
 
-## 10-evidence (03:29 to 03:42)
+## 10-evidence (03:30 to 03:42)
 
 **Slide 1** (shot): What was actually run [screenshot: run-evidence.jpg]
 
@@ -161,11 +161,11 @@ To replace the voice, record one file per scene (text in `promo/voice-text/<id>.
 
 > And every study is saved separately, so you can move between projects at any time.
 
-## 14-close (04:35 to 04:44)
+## 14-close (04:35 to 04:45)
 
-**Slide 1** (hero): Research moves faster than ever. Episteme keeps the reasons with it.
+**Slide 1** (hero): Research moves faster than ever. Episteme keeps the documentation with it.
 
-> Research moves faster than ever. Episteme makes sure the reasons keep up.
+> Research moves faster than ever. Episteme makes sure the documentation keeps up.
 
 **Slide 2** (hero): Episteme
 
