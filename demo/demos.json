@@ -1,17 +1,17 @@
 [
   {
-    "id": "hospital-readmission",
-    "title": "Hospital readmission",
-    "project": "Readmission prediction from clinical notes",
-    "summary": "A TF-IDF baseline misses its expected AUROC, so the researcher switches to PubMedBERT embeddings at step 4. Comes with a paper that overstates the results, for Check claims.",
-    "session": "hospital-readmission.jsonl",
-    "paper": "hospital-readmission-paper.txt"
+    "id": "alphafold",
+    "title": "AlphaFold 2 discovery (CASP14)",
+    "project": "AlphaFold 2 discovery (CASP14)",
+    "summary": "Distogram model stalls at GDT 61 on T1024 → step 4 pivot to end-to-end structure prediction.",
+    "session": "alphafold.jsonl"
   },
   {
-    "id": "alphafold",
-    "title": "AlphaFold",
-    "project": "AlphaFold 2 discovery (CASP14)",
-    "summary": "A simulated mid-2020 session: the AlphaFold 1 pipeline stalls at GDT_TS 61.2 on T1024, and the team switches to an end-to-end Evoformer with Invariant Point Attention.",
-    "session": "alphafold.jsonl"
+    "id": "hospital-readmission",
+    "title": "Hospital readmission (MIMIC-IV)",
+    "project": "Readmission prediction from clinical notes",
+    "summary": "TF-IDF baseline misses its AUROC target (0.54) → step 4 pivot to clinical embeddings (0.81).",
+    "session": "hospital-readmission.jsonl",
+    "paper": "hospital-readmission-paper.txt"
   }
 ]

@@ -1,0 +1,1 @@
+A paper reports the path that worked. The dead ends, the failed runs, the expectation that turned out wrong, and the moment someone said: this isn't working, let's try something else. None of that survives.

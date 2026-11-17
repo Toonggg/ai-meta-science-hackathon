@@ -8,20 +8,16 @@
 <script>document.documentElement.dataset.theme = localStorage.getItem("theme") || "tokyo-night";</script>
 <link rel="stylesheet" href="/themes.css">
 <link rel="stylesheet" href="/style.css">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="alternate icon" type="image/png" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 </head>
 <body>
 <header>
   <button type="button" class="brand" id="open-start" title="Start screen: your studies, a new notebook or a demo">
-    <span class="logo">◈</span>
+    <img src="/favicon.svg" width="26" height="26" alt="Episteme logo" class="brand-logo-img">
     <span><strong>Episteme</strong><small>a flight recorder for AI-assisted research</small></span>
   </button>
-  <nav id="tabs">
-    <button data-tab="question"><span class="num">1</span> Vet question</button>
-    <span class="arrow">→</span>
-    <button data-tab="diary" class="active"><span class="num">2</span> Record work</button>
-    <span class="arrow">→</span>
-    <button data-tab="claims"><span class="num">3</span> Check claims</button>
-  </nav>
   <button type="button" id="hdr-studies" class="badge hdr-studies" title="Back to the start screen: open another study, start a new one or load a demo">
     <span class="muted">Studies</span> <b id="hdr-study"></b>
   </button>
@@ -48,10 +44,10 @@
   </details>
 </header>
 
-<section id="start" hidden aria-labelledby="start-title">
+<section id="start" aria-labelledby="start-title">
   <div class="start-inner">
     <div class="start-head">
-      <span class="logo">◈</span>
+      <img src="/favicon.svg" width="56" height="56" alt="" class="start-logo-img">
       <h1 id="start-title">Episteme</h1>
       <p class="muted">A flight recorder for AI-assisted research. Start a study notebook, or explore a demo.</p>
     </div>
@@ -78,25 +74,6 @@
 </section>
 
 <main>
-  <!-- TASK 1 -->
-  <section id="tab-question" class="tab" hidden>
-    <div class="intro">
-      <h2>Is this question worth asking?</h2>
-      <p>Paste one research question. Episteme flags ambiguous terms, hidden assumptions and data you can't get, then gives a verdict: <b>proceed / narrow / revise / stop</b>.</p>
-    </div>
-    <ol class="tiers" id="tiers">
-      <li data-tier="local"><b>1 · Local rules</b><span>Instant. Nothing leaves your machine.</span></li>
-      <li data-tier="search"><b>2 · Literature search</b><span>Keywords only go to free scholarly APIs. If one is down, the others cover. <a href="#" class="open-status" id="tier-src"></a></span></li>
-      <li data-tier="ai"><b>3 · AI refinement</b><span>The model plans sharper searches, then critiques citing only papers found.</span></li>
-    </ol>
-    <div class="row">
-      <textarea id="q-input" rows="2" placeholder="e.g. How does social media engagement impact adolescent wellbeing? (Enter to stress-test, Shift+Enter for newline)"></textarea>
-      <button id="q-run" class="primary">Stress-test</button>
-    </div>
-    <div class="examples" id="q-examples"></div>
-    <div id="q-out"></div>
-  </section>
-
   <!-- TASK 2 -->
   <section id="tab-diary" class="tab">
     <div class="cols">
@@ -135,13 +112,15 @@
             <button type="button" data-view="raw" title="Everything the capture hooks recorded, grouped into episodes">Raw capture</button>
           </div>
           <span class="muted small" id="capture-status"></span>
+          <button type="button" class="btn replay-btn" id="tl-replay-btn" title="Watch this demo diary being written, one entry at a time" hidden>▶ Replay</button>
+          <span class="muted small" id="replay-status" hidden><span id="replay-progress"></span><button type="button" id="replay-skip-btn">Skip</button></span>
         </div>
         <div id="raw-view" hidden></div>
         <ol id="timeline"></ol>
       </div>
 
       <aside class="col-side">
-        <div class="card">
+        <div class="card reviewer-card">
           <h3>Reviewer: ask the log</h3>
           <p class="muted">Answers cite only diary events, like a reviewer who wasn't there would need.</p>
           <form id="ask-form" class="row">
@@ -151,12 +130,12 @@
           <div class="examples" id="ask-examples"></div>
           <div id="ask-out"></div>
         </div>
-        <details class="card tools">
-          <summary>Export and capture</summary>
+        <details class="card tools" open>
+          <summary>Export and capture (W3C PROV-JSON)</summary>
           <div class="btns">
-            <a class="btn" href="/api/export?format=md">Decision appendix (.md)</a>
-            <a class="btn" href="/api/export?format=prov">W3C PROV-JSON</a>
-            <a class="btn" href="/api/export?format=json">Raw JSON</a>
+            <a class="btn" href="/api/export?format=prov" title="W3C Provenance standard JSON">W3C PROV-JSON</a>
+            <a class="btn" href="/api/export?format=md" title="Paper decision appendix in Markdown">Decision appendix (.md)</a>
+            <a class="btn" href="/api/export?format=json" title="Raw diary JSON">Raw JSON</a>
           </div>
           <h3>Capture from other tools</h3>
           <p class="muted">Claude Code and git: <code>python3 capture/install.py &lt;project&gt;</code>. Any other script, notebook or agent can log events:</p>
@@ -167,21 +146,6 @@
         </details>
       </aside>
     </div>
-  </section>
-
-  <!-- TASK 3 -->
-  <section id="tab-claims" class="tab" hidden>
-    <div class="intro">
-      <h2>Claim-to-evidence map</h2>
-      <p>Paste a paper's text. Each claim gets linked to the figure, table or paragraph behind it, and to the diary run that produced it. Claims that are unsupported or overstated are flagged.</p>
-    </div>
-    <div class="row">
-      <button id="c-demo" class="ghost">Load demo paper</button>
-      <span class="muted" id="c-demo-hint">The hospital-readmission demo comes with a paper that overstates its results. Can you spot where before running it?</span>
-    </div>
-    <textarea id="c-input" rows="10" placeholder="Paste abstract + results + discussion (plain text)…"></textarea>
-    <div class="row"><button id="c-run" class="primary">Build claim map</button></div>
-    <div id="c-out"></div>
   </section>
 </main>
 

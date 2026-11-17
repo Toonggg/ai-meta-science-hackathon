@@ -250,3 +250,7 @@ Temporary Items
 
 # Episteme local state (diary, settings incl. API keys, logs)
 .episteme/
+
+# promo video: cache and rendered outputs (rebuild with python3 promo/build.py)
+promo/build/
+promo/out/

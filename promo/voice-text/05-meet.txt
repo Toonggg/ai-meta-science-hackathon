@@ -1,0 +1,1 @@
+Meet Episteme: a flight recorder for AI-assisted research. It records what was planned, what was run, what happened, and why the approach changed. While the work happens, not afterwards.

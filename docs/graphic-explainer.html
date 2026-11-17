@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Episteme: one-page overview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  /* Palette from PALETTE.md: navy and electric blue with a neon lime accent. Print with:
+     "Google Chrome" --headless --no-pdf-header-footer --print-to-pdf=docs/one-pager.pdf docs/one-pager.html */
+  :root {
+    --navy: #0b1020; --navy-2: #151b2e; --navy-3: #1f2638; --ink: #0e1424;
+    --blue: #3d5afe; --blue-2: #8ea2ff; --blue-tint: #e6eaff;
+    --lime: #c8ff3d; --lime-tint: #f0ffd0;
+    --bg: #f4f5f8; --card: #ffffff; --border: #e3e6ee; --muted: #667085;
+    --r: 22px;
+  }
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { width: 210mm; height: 297mm; overflow: hidden; background: var(--bg); color: var(--ink);
+         font: 8.9pt/1.38 Inter, system-ui, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page { padding: 10mm 11mm 8mm; height: 100%; display: flex; flex-direction: column; gap: 2.8mm; }
+  h1, h2, .serif { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; margin: 0; }
+  em { font-style: italic; }
+  .lime { background: linear-gradient(transparent 58%, var(--lime) 58%, var(--lime) 92%, transparent 92%); padding: 0 2px; }
+  .kicker { font-size: 7.4pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--blue); margin: 0 0 1.2mm; }
+  p { margin: 0; }
+
+  .hero { background: var(--navy); color: #fff; border-radius: var(--r); padding: 5.5mm 7mm 7mm; position: relative; overflow: hidden; }
+  .hero .top { display: flex; justify-content: space-between; align-items: baseline; }
+  .brand { font-weight: 700; font-size: 10pt; letter-spacing: .02em; }
+  .brand::before { content: "◈ "; color: var(--lime); }
+  .tag { font-size: 7.6pt; color: var(--blue-2); }
+  .hero h1 { font-size: 27pt; line-height: 1.02; margin: 2.5mm 0 2mm; max-width: 150mm; }
+  .hero h1 em { color: var(--lime); }
+  .hero p { color: #c9d0e4; font-size: 9pt; max-width: 160mm; }
+
+  .grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 2.8mm; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); padding: 4mm 5mm; min-width: 0; }
+  .card h2 { font-size: 14pt; line-height: 1.08; margin-bottom: 1.8mm; }
+  ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 1.1mm; }
+  li { padding-left: 4mm; position: relative; }
+  li::before { content: ""; position: absolute; left: 0; top: .55em; width: 1.6mm; height: 1.6mm; border-radius: 50%; background: var(--blue); }
+  .stat { display: flex; gap: 4mm; align-items: center; margin-top: 2mm; padding-top: 2mm; border-top: 1px solid var(--border); }
+  .stat b { font-family: "Instrument Serif", serif; font-weight: 400; font-size: 23pt; line-height: 1; color: var(--blue); }
+  .stat span { font-size: 8.4pt; }
+  .src { font-size: 6.6pt; color: var(--muted); margin-top: 1mm; }
+
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2.6mm; margin-top: 1mm; }
+  .step { background: var(--bg); border-radius: 14px; padding: 2.4mm 3mm; position: relative; }
+  .step .n { display: inline-grid; place-items: center; width: 5mm; height: 5mm; border-radius: 50%; background: var(--navy); color: var(--lime);
+             font-size: 7pt; font-weight: 700; margin-bottom: 1.4mm; }
+  .step b { display: block; font-size: 9.4pt; margin-bottom: .8mm; }
+  .step p { font-size: 7.9pt; color: #344054; }
+  .step:not(:last-child)::after { content: "→"; position: absolute; right: -2.4mm; top: 3mm; color: var(--blue-2); font-size: 9pt; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 1.4mm; margin: 2mm 0 0; }
+  .chip { font-size: 7.6pt; font-weight: 600; padding: .6mm 2.4mm; border-radius: 999px; background: var(--blue-tint); color: #2a3ca8; }
+  .chip.l { background: var(--lime-tint); color: #3a5200; }
+  .chip.g { background: #eef0f5; color: #475467; }
+
+  .shot { border-radius: 14px; overflow: hidden; border: 1px solid var(--border); margin-top: 2.6mm; }
+  .shot img { display: block; width: 100%; height: 29mm; object-fit: cover; object-position: top left; }
+  .cap { font-size: 7.2pt; color: var(--muted); margin-top: 1.4mm; }
+
+  .ask { background: var(--navy); color: #fff; border-radius: var(--r); padding: 4mm 5mm; display: flex; flex-direction: column; gap: 2.4mm; justify-content: center; min-width: 0; }
+  .ask .q { font-family: "Instrument Serif", serif; font-size: 16pt; line-height: 1.1; }
+  .ask .q em { color: var(--lime); }
+  .ask .a { font-size: 8.2pt; color: #c9d0e4; background: var(--navy-2); border: 1px solid var(--navy-3); border-radius: 14px; padding: 3mm 3.6mm; }
+  .ask .a b { color: #fff; }
+  .ref { color: var(--lime); font-weight: 600; }
+
+  .run { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 5mm; }
+  .run p { margin-top: 1.4mm; font-size: 8pt; }
+  code { font: 500 8pt/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre { white-space: pre-wrap; margin: 1.2mm 0 0; background: var(--navy); color: #e6eaff; border-radius: 12px; padding: 2.6mm 3.4mm; }
+  pre code .c { color: var(--blue-2); }
+  .foot { margin-top: auto; display: flex; justify-content: space-between; font-size: 7.4pt; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <section class="hero">
+    <div class="top"><span class="brand">Episteme</span><span class="tag">AI4MetaScience hackathon · Task 2: the provenance notebook</span></div>
+    <h1>A flight recorder for <em>AI-assisted</em> research.</h1>
+    <p>Episteme captures what a researcher and an AI agent do during a study, turns it into a short diary of decisions,
+       and records who stated each reason, so a reviewer who wasn't there can find out <i>why</i> the study changed direction.</p>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <p class="kicker">The problem</p>
+      <h2>Research keeps its results. It loses its <span class="lime">reasons</span>.</h2>
+      <ul>
+        <li>Notebooks are written at the end of the day, from memory, when there is time.</li>
+        <li>Papers report the path that worked. Dead ends, failed runs and broken expectations disappear.</li>
+        <li>AI agents now run dozens of steps in minutes. The record of <i>why</i> falls further behind.</li>
+      </ul>
+      <div class="stat"><b>70%+</b><span>of researchers have tried and failed to reproduce another scientist's experiments.</span></div>
+      <p class="src">M. Baker, Nature 533, 452–454 (2016). Survey of 1,576 researchers.</p>
+    </section>
+
+    <section class="card">
+      <p class="kicker">What a reviewer sees</p>
+      <h2>A diary of decisions, written while the work happens.</h2>
+      <div class="chips">
+        <span class="chip">Plan + expectation</span><span class="chip">Run + result</span><span class="chip">Surprise</span>
+        <span class="chip">Pivot + why</span><span class="chip">Commit</span><span class="chip">Note</span>
+      </div>
+      <div class="shot"><img src="../promo/assets/timeline.jpg" alt="Episteme diary timeline"></div>
+      <p class="cap">Hospital-readmission demo: the run misses its target, a surprise is recorded, and the change of approach asks for its reason.</p>
+    </section>
+  </div>
+
+  <section class="card">
+    <p class="kicker">How it works</p>
+    <h2>From raw activity to decisions, with nothing typed after the fact.</h2>
+    <div class="flow">
+      <div class="step"><span class="n">1</span><b>Capture</b><p>Claude Code and git hooks record instructions, commands, outputs and commits as they happen, secrets redacted.</p></div>
+      <div class="step"><span class="n">2</span><b>Group</b><p>The raw log is split into episodes: one instruction and everything the agent did for it.</p></div>
+      <div class="step"><span class="n">3</span><b>Stitch</b><p>Rules write plans, runs, surprises and commits. A model only judges flagged changes of approach.</p></div>
+      <div class="step"><span class="n">4</span><b>Ask &amp; export</b><p>Answers cite diary entries. Export a Markdown decision appendix or W3C PROV-JSON.</p></div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <p class="kicker">Why you can trust it</p>
+      <h2>Every reason says <span class="lime">who</span> stated it.</h2>
+      <div class="chips"><span class="chip l">researcher</span><span class="chip">agent</span><span class="chip g">inferred</span></div>
+      <ul style="margin-top:2mm">
+        <li>A reason counts as stated only if it is a <b>verbatim quote</b> from the researcher or the agent. A model's paraphrase is labelled as the model's.</li>
+        <li>Every entry links to the raw events behind it.</li>
+        <li>Works offline with no model. Nothing leaves your machine unless you connect one.</li>
+      </ul>
+    </section>
+
+    <section class="ask">
+      <p class="kicker" style="color:var(--blue-2);margin:0">Ask the log</p>
+      <p class="q">"Why did they switch to <em>clinical embeddings</em>?"</p>
+      <p class="a"><b>Because the plan expected AUROC ≥ 0.75 and the run scored 0.54</b> <span class="ref">[E1–E3]</span>. The researcher switched from sparse n-grams to frozen clinical embeddings, saying that n-grams lose the clinical semantics they need <span class="ref">[E4]</span>. The new approach reached 0.81 <span class="ref">[E5]</span>.</p>
+    </section>
+  </div>
+
+  <section class="card run">
+    <div>
+      <p class="kicker">Try it</p>
+      <pre><code>./run   <span class="c"># Python 3.9+, standard library only</span></code></pre>
+      <p>Opens a local page. Open a demo, or press <b>▶ Replay</b> to watch its diary being written entry by entry.</p>
+    </div>
+    <div>
+      <p class="kicker">Use it on your own project</p>
+      <pre><code>python3 capture/install.py /path/to/project</code></pre>
+      <p>Installs the Claude Code and git hooks. If Episteme isn't running, events wait and arrive later; the agent is never blocked.</p>
+    </div>
+  </section>
+
+  <div class="foot"><span>No installs, no build step, no account. Python standard library and vanilla JavaScript.</span><span>github.com/Toonggg/ai-meta-science-hackathon</span></div>
+</div>
+</body>
+</html>

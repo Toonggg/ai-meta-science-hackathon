@@ -89,7 +89,8 @@ async function loadStatus() {
   sb.classList.toggle("warn", src.up > 0 && src.up < src.enabled);
   sb.classList.toggle("bad", src.available && src.up === 0 && src.sources.some((x) => x.enabled && x.last_check));
   sb.title = "Search sources: click for live status and manual checks";
-  $("#tier-src").textContent = src.available ? `${src.up}/${src.enabled} online · status` : "all off · configure";
+  const tierSrc = $("#tier-src"); // Task 1 panel: absent in the Task 2-only page
+  if (tierSrc) tierSrc.textContent = src.available ? `${src.up}/${src.enabled} online · status` : "all off · configure";
   $("#use-search").disabled = !src.available;
   $("#use-search").checked = src.available && localStorage.getItem("useSearch") !== "0";
   // One header pill summarises both capabilities; the details live in the menu it opens.
@@ -101,8 +102,8 @@ async function loadStatus() {
 }
 const useSearch = () => $("#use-search").checked;
 function syncTiers() {
-  $('#tiers [data-tier="search"]').classList.toggle("off", !useSearch());
-  $('#tiers [data-tier="ai"]').classList.toggle("off", !useAI());
+  $('#tiers [data-tier="search"]')?.classList.toggle("off", !useSearch());
+  $('#tiers [data-tier="ai"]')?.classList.toggle("off", !useAI());
 }
 $("#use-ai").addEventListener("change", (e) => { localStorage.setItem("useAI", e.target.checked ? "1" : "0"); syncTiers(); });
 $("#use-search").addEventListener("change", (e) => { localStorage.setItem("useSearch", e.target.checked ? "1" : "0"); syncTiers(); });
@@ -289,8 +290,11 @@ $("#st-check-all").addEventListener("click", async (e) => {
 async function loadDiary() {
   const snap = await api("/api/events");
   state.events = snap.events;
+  state.demo = snap.demo;
   state.sig = snap.events.map((e) => `${e.id}:${e.ts}:${e.step}:${e.status || ""}:${e.confirmation || ""}:${e.title}`).join("|");
   $("#project-name").textContent = snap.project || "Research diary";
+  $("#tl-replay-btn").hidden = !snap.demo || replay.active;
+  if (replay.active) snap.events.forEach((e) => { if (!replay.seen.has(e.id)) replay.hold.add(e.id); }); // the replay reveals these one by one
   $("#hdr-study").textContent = snap.project || "Untitled study";
   renderTimeline();
 }
@@ -361,7 +365,8 @@ function renderTimeline() {
   tl.hidden = view === "raw";
   $("#raw-view").hidden = view !== "raw";
   if (view === "raw") return renderRaw();
-  const shown = view === "decisions" ? state.events.filter(isDecision) : state.events;
+  const visible = replay.hold.size ? state.events.filter((e) => !replay.hold.has(e.id)) : state.events;
+  const shown = view === "decisions" ? visible.filter(isDecision) : visible;
   tl.innerHTML = shown.length ? shown.map(evCard).join("") : state.events.length
     ? `<li class="empty">No decisions yet. Switch to All to see every event.</li>`
     : `<li class="empty">Empty diary. Add a plan above, or stress-test a question in step 1 and start from there.</li>`;
@@ -635,6 +640,7 @@ $("#ask-form").addEventListener("submit", (e) => {
   busy($("#ask-form button"), async () => {
     const res = await api("/api/ask", { question: q, use_ai: useAI() });
     $("#ask-out").innerHTML = `<div class="answer">${md(res.answer)}</div>${modeNote(res)}`;
+    $("#ask-out").scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
 });
 
@@ -659,8 +665,10 @@ async function openStart() {
       ${open ? "" : `<button type="button" class="ghost start-del" data-del-study="${esc(st.id)}" title="Delete this study and its capture">Delete</button>`}
     </li>`;
   }).join("");
-  $("#start-demos").innerHTML = demos.map((d) => `<button type="button" class="start-demo" data-demo="${esc(d.id)}">
-      <b>${esc(d.title)}${d.saved ? ` <small class="muted">· saved, opens your copy</small>` : ""}</b><span class="muted">${esc(d.summary)}</span></button>`).join("");
+  $("#start-demos").innerHTML = demos.map((d) => `<div class="start-demo-row">
+      <button type="button" class="start-demo" data-demo="${esc(d.id)}"><b>${esc(d.title)}${d.saved ? ` <small class="muted">· saved, opens your copy</small>` : ""}</b><span class="muted">${esc(d.summary)}</span></button>
+      <button type="button" class="replay" data-replay="${esc(d.id)}" title="Watch the diary being written, one entry at a time">▶ Replay</button>
+    </div>`).join("");
   $("#start").hidden = false;
   document.body.style.overflow = "hidden";
   ($(".start-study.current .start-open") || $("#start-project")).focus();
@@ -673,8 +681,74 @@ function closeStart() {
   showTab("diary");
 }
 
+// Live replay of a demo: the server feeds the session's raw capture one line at a time
+// (/api/demo/step) and the page reveals each diary entry the stitcher writes, one at a time.
+// Many raw lines write nothing (an episode is only stitched once it is finished), and one line
+// can finish an episode that writes several entries, so the pace is set per entry, not per line.
+// ?pace=2 in the URL makes it twice as slow (for screen recordings), ?pace=0.5 twice as fast.
+const replay = { active: false, fast: false, hold: new Set(), seen: new Set() };
+const REPLAY_MS = { plan: 3000, run: 3000, surprise: 4000, pivot: 5000, note: 3500, question: 3500, artifact: 2500 };
+const replayPace = (() => { const p = parseFloat(new URLSearchParams(location.search).get("pace")); return p > 0 ? p : 1; })();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function revealEntry(id) {
+  replay.hold.delete(id);
+  const open = $$(".ev.open").map((el) => el.dataset.id);
+  renderTimeline();
+  open.forEach((x) => $("#ev-" + x)?.classList.add("open"));
+  const li = $("#ev-" + id);
+  if (!li) return; // hidden by the Decisions view
+  li.classList.add("arrived");
+  li.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  setTimeout(() => li.classList.add("settled"), 800);
+}
+
+async function runLiveReplay(demoId) {
+  if (replay.active || !demoId) return;
+  Object.assign(replay, { active: true, fast: false });
+  replay.hold.clear();
+  replay.seen.clear();
+  const status = $("#replay-status"), progress = $("#replay-progress");
+  $("#tl-replay-btn").hidden = true;
+  status.hidden = false;
+  progress.textContent = "Replaying…";
+  let shown = 0;
+  try {
+    let step = 0, total = 1;
+    while (step < total) {
+      const r = await api("/api/demo/step", { id: demoId, step, reset: step === 0 });
+      total = r.total;
+      if (step === 0) await afterSwitch(); // the demo's study is open and empty: close the start screen
+      await loadDiary();
+      const fresh = state.events.filter((e) => !replay.seen.has(e.id));
+      fresh.forEach((e) => replay.seen.add(e.id));
+      for (const e of fresh) {
+        revealEntry(e.id);
+        shown += 1;
+        progress.textContent = `Replaying · ${shown} ${shown === 1 ? "entry" : "entries"}`;
+        if (!replay.fast) await sleep((REPLAY_MS[e.type] || 3000) * replayPace);
+      }
+      if (!fresh.length && !replay.fast) await sleep(250 * replayPace); // raw lines that write nothing yet
+      step += 1;
+    }
+    await Promise.all([loadConfirms(), refreshCapture()]);
+    if (!$("#ask-input").value) $("#ask-input").value = "Why did they change approach at step 4?";
+  } catch (e) {
+    toast("Replay stopped: " + e.message);
+  } finally {
+    replay.active = false;
+    replay.hold.clear();
+    status.hidden = true;
+    await loadDiary().catch(() => {});
+  }
+}
+$("#replay-skip-btn").addEventListener("click", () => { replay.fast = true; });
+$("#tl-replay-btn").addEventListener("click", () => runLiveReplay(state.demo));
+
 async function afterSwitch() { // another study is open: drop what the page showed for the old one
-  $("#prompts").innerHTML = ""; $("#ask-out").innerHTML = ""; $("#c-out").innerHTML = ""; $("#c-input").value = "";
+  $("#prompts").innerHTML = ""; $("#ask-out").innerHTML = "";
+  if ($("#c-out")) $("#c-out").innerHTML = "";
+  if ($("#c-input")) $("#c-input").value = "";
   delete $("#confirms").dataset.key;
   await Promise.all([loadDiary(), loadConfirms(), refreshCapture()]);
   closeStart();
@@ -711,6 +785,8 @@ $("#start-studies").addEventListener("click", async (e) => {
   });
 });
 $("#start-demos").addEventListener("click", (e) => {
+  const rb = e.target.closest("[data-replay]");
+  if (rb) return runLiveReplay(rb.dataset.replay);
   const b = e.target.closest("[data-demo]");
   if (!b) return;
   busy(b, async () => {
@@ -748,14 +824,16 @@ const Q_EXAMPLES = [
   "Among adult inpatients in MIMIC-IV, do discharge-note features predict 30-day readmission?",
   "Should AI systems replace human peer reviewers?",
 ];
-$("#q-examples").innerHTML = Q_EXAMPLES.map((q) => `<button type="button">${esc(q)}</button>`).join("");
-$$("#q-examples button").forEach((b) => b.addEventListener("click", () => { $("#q-input").value = b.textContent; $("#q-run").click(); }));
-$("#q-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
-    e.preventDefault();
-    $("#q-run").click();
-  }
-});
+if ($("#q-input")) {
+  $("#q-examples").innerHTML = Q_EXAMPLES.map((q) => `<button type="button">${esc(q)}</button>`).join("");
+  $$("#q-examples button").forEach((b) => b.addEventListener("click", () => { $("#q-input").value = b.textContent; $("#q-run").click(); }));
+  $("#q-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      $("#q-run").click();
+    }
+  });
+}
 
 // [P3] [D1] [W2] -> clickable chips that jump to the item in the results; [E4] -> diary
 function rich(text) {
@@ -776,36 +854,38 @@ document.addEventListener("click", (e) => {
 const originTag = (o) => o ? `<span class="origin o-${o}" title="${{ rule: "From local rules", search: "From literature search", ai: "From the AI model" }[o] || ""}">${o === "ai" ? "AI" : o}</span>` : "";
 
 let qPoll = null;
-$("#q-run").addEventListener("click", async () => {
-  const q = $("#q-input").value.trim();
-  if (!q) return $("#q-input").focus();
-  clearTimeout(qPoll);
-  qPoll = null;
-  const btn = $("#q-run");
-  btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>Running…`;
-  try {
-    const { job } = await api("/api/question/start", { question: q, use_search: useSearch(), use_ai: useAI() });
-    const tick = async () => {
-      const j = await api("/api/jobs/" + job);
-      renderJob(q, j);
-      if (j.status === "done") {
-        btn.disabled = false;
-        btn.textContent = "Stress-test";
-        clearTimeout(qPoll);
-        qPoll = null;
-      } else {
-        qPoll = setTimeout(tick, 600);
-      }
-    };
-    await tick();
-  } catch (e) {
-    toast("Error: " + e.message);
-    btn.disabled = false;
-    btn.textContent = "Stress-test";
+if ($("#q-run")) {
+  $("#q-run").addEventListener("click", async () => {
+    const q = $("#q-input").value.trim();
+    if (!q) return $("#q-input").focus();
     clearTimeout(qPoll);
     qPoll = null;
-  }
-});
+    const btn = $("#q-run");
+    btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>Running…`;
+    try {
+      const { job } = await api("/api/question/start", { question: q, use_search: useSearch(), use_ai: useAI() });
+      const tick = async () => {
+        const j = await api("/api/jobs/" + job);
+        renderJob(q, j);
+        if (j.status === "done") {
+          btn.disabled = false;
+          btn.textContent = "Stress-test";
+          clearTimeout(qPoll);
+          qPoll = null;
+        } else {
+          qPoll = setTimeout(tick, 600);
+        }
+      };
+      await tick();
+    } catch (e) {
+      toast("Error: " + e.message);
+      btn.disabled = false;
+      btn.textContent = "Stress-test";
+      clearTimeout(qPoll);
+      qPoll = null;
+    }
+  });
+}
 
 const ICON = { pending: "○", running: '<span class="spinner"></span>', done: "✓", skipped: "–", failed: "!" };
 function stageCard(key, title, st) {
@@ -883,17 +963,21 @@ function renderJob(q, j) {
 }
 
 // ---------------------------------------------------------------- task 3: claims
-$("#c-demo").addEventListener("click", async () => {
-  const { text } = await api("/api/demo-paper");
-  if (!text) return toast("This study has no demo paper. Load the hospital-readmission demo from the start screen (click the logo).");
-  $("#c-input").value = text;
-});
-$("#c-run").addEventListener("click", () => {
-  const text = $("#c-input").value.trim();
-  if (!text) return toast("Paste some paper text, or load the demo paper");
-  $("#c-out").innerHTML = `<div class="empty"><span class="spinner"></span>Analysing claims and cross-referencing with diary...</div>`;
-  busy($("#c-run"), async () => renderClaims(await api("/api/claims", { text, use_ai: useAI() })));
-});
+if ($("#c-demo")) {
+  $("#c-demo").addEventListener("click", async () => {
+    const { text } = await api("/api/demo-paper");
+    if (!text) return toast("This study has no demo paper. Load the hospital-readmission demo from the start screen (click the logo).");
+    $("#c-input").value = text;
+  });
+}
+if ($("#c-run")) {
+  $("#c-run").addEventListener("click", () => {
+    const text = $("#c-input").value.trim();
+    if (!text) return toast("Paste some paper text, or load the demo paper");
+    $("#c-out").innerHTML = `<div class="empty"><span class="spinner"></span>Analysing claims and cross-referencing with diary...</div>`;
+    busy($("#c-run"), async () => renderClaims(await api("/api/claims", { text, use_ai: useAI() })));
+  });
+}
 
 function renderClaims(r) {
   const counts = { supported: 0, weak: 0, overclaimed: 0, unsupported: 0 };
@@ -925,8 +1009,9 @@ function renderClaims(r) {
   await Promise.all([loadConfirms().catch(() => {}), refreshCapture().catch(() => {})]);
   const tab = location.hash.slice(1);
   if (["question", "diary", "claims"].includes(tab)) showTab(tab);
-  if (!startSeen()) await openStart().catch(() => {});
+  await openStart().catch(() => {});
   setInterval(async () => { // pick up events from capture hooks, the stitcher and other tools
+    if (replay.active) return; // the replay loads and reveals entries itself
     const snap = await api("/api/events").catch(() => null);
     if (snap && snap.events) {
       const sig = snap.events.map((e) => `${e.id}:${e.ts}:${e.step}:${e.status || ""}:${e.confirmation || ""}:${e.title}`).join("|");

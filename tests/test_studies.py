@@ -72,6 +72,7 @@ class StudiesTest(unittest.TestCase):
         server.open_demo("hospital-readmission")
         stitched = server.STITCHER.status()["stitched"]
         self.assertTrue(stitched)
+        plans = len([e for e in server.STORE.events() if e["type"] == "plan"])
         server.new_study("Empty")
         self.assertEqual(server.STITCHER.status()["stitched"], 0)
         server.STITCHER.run_once(ask_model=False)
@@ -79,7 +80,7 @@ class StudiesTest(unittest.TestCase):
         server.open_demo("hospital-readmission")
         server.STITCHER.run_once(ask_model=False)  # must not stitch the demo a second time
         self.assertEqual(server.STITCHER.status()["stitched"], stitched)
-        self.assertEqual(len([e for e in server.STORE.events() if e["type"] == "plan"]), 2)
+        self.assertEqual(len([e for e in server.STORE.events() if e["type"] == "plan"]), plans)
 
     def test_delete(self):
         first = server.new_study("First")

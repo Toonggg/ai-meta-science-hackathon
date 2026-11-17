@@ -1,0 +1,1 @@
+When it's time to publish, export the record as a Markdown decision appendix for your paper, or as W3C PROV-JSON for provenance tools.

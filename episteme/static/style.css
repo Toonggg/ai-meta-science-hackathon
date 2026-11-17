@@ -339,3 +339,27 @@ table.st tr.off td { color: var(--muted); }
 .hdr-studies::before { content: none; }
 .hdr-studies b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 1100px) { .hdr-studies { max-width: 160px; } }
+
+/* Demo row: open the finished demo, or watch it being recorded */
+.start-demo-row { display: flex; gap: 8px; align-items: stretch; }
+.start-demo-row .start-demo { flex: 1; min-width: 0; }
+.start-demo-row .replay { flex: none; font-size: 13px; padding: 0 12px; background: var(--bg); color: var(--muted); }
+.start-demo-row .replay:hover { color: var(--accent); border-color: var(--accent); }
+
+.brand-logo-img { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; }
+.start-logo-img { width: 56px; height: 56px; border-radius: 50%; }
+
+/* Replay: one quiet line, and each new entry fades in once */
+.replay-btn { margin-left: auto; }
+.replay-btn[hidden] { display: none; } /* .btn's display would otherwise beat [hidden] */
+#replay-status { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; }
+#replay-status[hidden] { display: none; }
+#replay-status button { font-size: 12px; padding: 2px 8px; }
+@keyframes ev-arrive {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+li.ev.arrived { animation: ev-arrive .5s ease-out; }
+li.ev.arrived .card { border-color: var(--accent); transition: border-color 2.5s ease; }
+li.ev.arrived.settled .card { border-color: var(--line); }
+@media (prefers-reduced-motion: reduce) { li.ev.arrived { animation: none; } }

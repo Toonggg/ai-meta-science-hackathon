@@ -1,0 +1,1 @@
+And the way research is done is changing. More and more analysis code is written and run by AI agents, like Claude Code, working alongside the researcher. An agent can take hundreds of actions in an afternoon. The researcher's decisions, the why behind each change, get buried in chat logs and terminal scrollback. The faster the work goes, the less of it anyone can reconstruct.
