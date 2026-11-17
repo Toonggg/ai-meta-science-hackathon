@@ -756,13 +756,21 @@ async function afterSwitch() { // another study is open: drop what the page show
 
 $("#start-new").addEventListener("submit", (e) => {
   e.preventDefault();
-  const project = $("#start-project").value.trim();
-  if (!project) return $("#start-project").focus();
-  busy($("#start-new button"), async () => {
+  const project = $("#start-project").value.trim() || "Untitled study";
+  busy($("#start-new button[type=submit]"), async () => {
     await api("/api/studies/new", { project });
     $("#start-project").value = "";
     await afterSwitch();
     toast("New notebook started. Add a plan with an expectation to begin.");
+    $("#add-title").focus();
+  });
+});
+$("#start-blank-btn")?.addEventListener("click", () => {
+  busy($("#start-blank-btn"), async () => {
+    await api("/api/studies/new", { project: "Untitled study" });
+    $("#start-project").value = "";
+    await afterSwitch();
+    toast("New blank notebook started. Add a plan with an expectation to begin.");
     $("#add-title").focus();
   });
 });
@@ -965,8 +973,12 @@ function renderJob(q, j) {
 // ---------------------------------------------------------------- task 3: claims
 if ($("#c-demo")) {
   $("#c-demo").addEventListener("click", async () => {
-    const { text } = await api("/api/demo-paper");
-    if (!text) return toast("This study has no demo paper. Load the hospital-readmission demo from the start screen (click the logo).");
+    let { text } = await api("/api/demo-paper");
+    if (!text) {
+      const res = await api("/api/demo-paper?id=alphafold").catch(() => null);
+      if (res && res.text) text = res.text;
+    }
+    if (!text) return toast("This study has no demo paper. Load the AlphaFold demo from the start screen (click the logo).");
     $("#c-input").value = text;
   });
 }

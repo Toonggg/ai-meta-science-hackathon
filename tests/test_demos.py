@@ -20,8 +20,8 @@ import server  # noqa: E402
 import stitcher  # noqa: E402
 from store import Diary, RawLog  # noqa: E402
 
-IDS = ["alphafold", "hospital-readmission"]
-# Same story shape for both: plan, run, surprise, pivot at step 4, new plan, run, commit.
+IDS = ["alphafold"]
+# Story shape: plan, run, surprise, pivot at step 4, new plan, run, artifact.
 SHAPE = ["plan", "run", "surprise", "pivot", "plan", "run", "artifact"]
 
 
@@ -48,7 +48,7 @@ class DemoTest(unittest.TestCase):
         snap = server.STORE.snapshot()
         self.assertEqual((snap["events"], snap["project"], snap.get("demo")), ([], "", None))
 
-    def test_both_demos_load_the_same_way(self):
+    def test_demo_loads_through_capture(self):
         for demo_id in IDS:
             server.load_demo(demo_id)
             snap = server.STORE.snapshot()
@@ -64,26 +64,26 @@ class DemoTest(unittest.TestCase):
             self.assertIn("Step 4", answer)
 
     def test_loading_replaces_the_previous_study(self):
-        server.load_demo("hospital-readmission")
+        server.load_demo("alphafold")
+        server.STORE.add({"type": "note", "title": "extra note", "source": "manual"})
         server.load_demo("alphafold")
         raw_lines = [l for l in demos.session("alphafold") if l.get("kind") not in ("note", "question")]
         self.assertEqual(len(server.RAW.all()), len(raw_lines))
         self.assertEqual(self.types()[:len(SHAPE)], SHAPE)
 
-    def test_readmission_note_links_the_run(self):
-        server.load_demo("hospital-readmission")
+    def test_alphafold_note_links_the_run(self):
+        server.load_demo("alphafold")
         evs = server.STORE.events()
         note = next((e for e in reversed(evs) if e["type"] == "note"), None)
         self.assertIsNotNone(note)
         self.assertEqual((note["type"], note["actor"]), ("note", "human"))
-        run = next((e for e in evs if e["type"] == "run" and "0.81" in e.get("result", "")), None)
+        run = next((e for e in evs if e["type"] == "run" and "T1044" in e.get("title", "")), None)
         self.assertIsNotNone(run)
         self.assertEqual(note["links"], [run["id"]])
-        self.assertIn("0.81", run["result"])
+        self.assertIn("crashed", run["result"])
 
     def test_paper_follows_the_loaded_demo(self):
-        self.assertIn("AUROC 0.81 vs 0.54", demos.paper("hospital-readmission"))
-        self.assertEqual(demos.paper("alphafold"), "")
+        self.assertIn("GDT_TS 89.4 vs 61.2", demos.paper("alphafold"))
 
     def test_unknown_demo(self):
         with self.assertRaises(KeyError):
@@ -127,7 +127,7 @@ class DemoReplayTest(unittest.TestCase):
         old = replay.TOKEN
         replay.TOKEN = server.TOKEN
         try:
-            self.assertTrue(replay.post(self.url, "/api/demo", {"id": "hospital-readmission"})["ok"])
+            self.assertTrue(replay.post(self.url, "/api/demo", {"id": "alphafold"})["ok"])
         finally:
             replay.TOKEN = old
         self.assertIn("Abstract", req("/api/demo-paper")["text"])

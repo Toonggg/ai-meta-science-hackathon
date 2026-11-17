@@ -145,7 +145,7 @@ def heuristic(text, events):
             issues.append("Rests on %s, whose contents were not inspected in offline mode: support is unverified."
                           % ", ".join(unseen))
         if scope and status != "unsupported":
-            if not any(re.search(r"hospital|site|dataset|population|external", t, re.I) for t in support_text if t != s):
+            if not any(re.search(r"hospital|site|dataset|population|external|target|protein|domain", t, re.I) for t in support_text if t != s):
                 status = "overclaimed" if status != "unsupported" else status
                 issues.append("Scope claim ('%s') with no evidence beyond the data actually used." % scope.group(0))
         if scope and not has_evidence:
@@ -154,7 +154,7 @@ def heuristic(text, events):
             # The researcher's own caveats in the diary can directly contradict a generalisation claim.
             for e in events:
                 blob = "%s %s" % (e.get("title", ""), e.get("detail", ""))
-                m = re.search(r"(one|single) (hospital|site|dataset)|no external validation", blob, re.I)
+                m = re.search(r"(one|single) (hospital|site|dataset|target)|no external validation|fails on orphan", blob, re.I)
                 if e["type"] == "note" and m and e["id"] not in [d["id"] for d in diary]:
                     diary.append({"id": e["id"], "title": e["title"], "result": "", "provenance": e.get("provenance", "stated")})
                     status = "overclaimed"

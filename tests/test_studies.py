@@ -69,7 +69,7 @@ class StudiesTest(unittest.TestCase):
         self.assertIn("Mine", [i["project"] for i in server.STUDIES.list()])
 
     def test_stitch_state_follows_the_study(self):
-        server.open_demo("hospital-readmission")
+        server.open_demo("alphafold")
         stitched = server.STITCHER.status()["stitched"]
         self.assertTrue(stitched)
         plans = len([e for e in server.STORE.events() if e["type"] == "plan"])
@@ -77,7 +77,7 @@ class StudiesTest(unittest.TestCase):
         self.assertEqual(server.STITCHER.status()["stitched"], 0)
         server.STITCHER.run_once(ask_model=False)
         self.assertEqual(server.STORE.events(), [])
-        server.open_demo("hospital-readmission")
+        server.open_demo("alphafold")
         server.STITCHER.run_once(ask_model=False)  # must not stitch the demo a second time
         self.assertEqual(server.STITCHER.status()["stitched"], stitched)
         self.assertEqual(len([e for e in server.STORE.events() if e["type"] == "plan"]), plans)
@@ -135,7 +135,6 @@ class StudiesApiTest(unittest.TestCase):
     def test_flow(self):
         self.assertEqual(self.call("/api/studies")[1]["studies"], [])
         self.assertEqual(self.call("/api/studies/new", {"project": "A"}, token=False)[0], 403)
-        self.assertEqual(self.call("/api/studies/new", {})[0], 400)
         a = self.call("/api/studies/new", {"project": "A"})[1]["id"]
         self.assertEqual(self.call("/api/demo", {"id": "alphafold"})[0], 200)
         listed = self.call("/api/studies")[1]
@@ -147,6 +146,9 @@ class StudiesApiTest(unittest.TestCase):
         self.assertEqual(self.call("/api/studies/open", {"id": "nope"})[0], 400)
         self.assertEqual(self.call("/api/studies/delete", {"id": listed["current"]})[0], 200)
         self.assertEqual([s["project"] for s in self.call("/api/studies")[1]["studies"]], ["A"])
+        # Blank project without a name is permitted
+        b = self.call("/api/studies/new", {})[1]["id"]
+        self.assertTrue(b)
 
 
 if __name__ == "__main__":

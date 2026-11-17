@@ -230,7 +230,7 @@ class Handler(BaseHTTPRequestHandler):
             except KeyError:
                 return self.send(404, {"error": "unknown demo"})
         if p == "/api/demo-paper":  # the paper of the demo that is loaded, if it has one
-            demo_id = STORE.snapshot().get("demo")
+            demo_id = parse_qs(u.query).get("id", [STORE.snapshot().get("demo") or ""])[0]
             text = demos.paper(demo_id) if demo_id else ""
             return self.send(200, {"text": text, "demo": demo_id})
         if p == "/api/export":
@@ -349,9 +349,7 @@ class Handler(BaseHTTPRequestHandler):
             if p.startswith("/api/studies/") and not STUDIES:
                 return self.send(400, {"error": "saved studies are not enabled"})
             if p == "/api/studies/new":  # {"project": "name"}: a new notebook; the open one is kept
-                project = (b.get("project") or "").strip()
-                if not project:
-                    return self.send(400, {"error": "a new study needs a project name"})
+                project = (b.get("project") or "").strip() or "Untitled study"
                 return self.send(200, {"id": new_study(project)})
             if p == "/api/studies/open":  # {"id": "..."}
                 open_study(b["id"])

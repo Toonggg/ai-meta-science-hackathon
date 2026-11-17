@@ -21,6 +21,13 @@
   <button type="button" id="hdr-studies" class="badge hdr-studies" title="Back to the start screen: open another study, start a new one or load a demo">
     <span class="muted">Studies</span> <b id="hdr-study"></b>
   </button>
+  <nav id="tabs">
+    <button type="button" data-tab="question"><span class="num">1</span> Vet question</button>
+    <span class="arrow">→</span>
+    <button type="button" data-tab="diary" class="active"><span class="num">2</span> Record work</button>
+    <span class="arrow">→</span>
+    <button type="button" data-tab="claims"><span class="num">3</span> Check claims</button>
+  </nav>
   <details class="ai hdr-menu" id="hdr-menu">
     <summary class="badge" id="hdr-sum" title="Model, search and theme">…</summary>
     <div class="menu">
@@ -61,8 +68,11 @@
         <h2>New study notebook</h2>
         <p class="muted">An empty diary for your own project. Log entries by hand, or connect Claude Code and git with <code>capture/install.py</code>.</p>
         <label for="start-project" class="small muted">Project name</label>
-        <input id="start-project" placeholder="e.g. Thermostability of designed enzymes" autocomplete="off" required>
-        <button class="primary" type="submit">Start notebook</button>
+        <input id="start-project" placeholder="e.g. Thermostability of designed enzymes" autocomplete="off">
+        <div class="row btns" style="margin-top: 10px; margin-bottom: 0;">
+          <button class="primary" type="submit">Start notebook</button>
+          <button type="button" class="ghost" id="start-blank-btn" title="Start an empty study right away">Start blank project</button>
+        </div>
       </form>
       <div class="card start-card">
         <h2>Load a demo</h2>
@@ -74,6 +84,25 @@
 </section>
 
 <main>
+  <!-- TASK 1 -->
+  <section id="tab-question" class="tab" hidden>
+    <div class="intro">
+      <h2>Is this question worth asking?</h2>
+      <p>Paste one research question. Episteme flags ambiguous terms, hidden assumptions and data you can't get, then gives a verdict: <b>proceed / narrow / revise / stop</b>.</p>
+    </div>
+    <ol class="tiers" id="tiers">
+      <li data-tier="local"><b>1 · Local rules</b><span>Instant. Nothing leaves your machine.</span></li>
+      <li data-tier="search"><b>2 · Literature search</b><span>Keywords only go to free scholarly APIs. If one is down, the others cover. <a href="#" class="open-status" id="tier-src"></a></span></li>
+      <li data-tier="ai"><b>3 · AI refinement</b><span>The model plans sharper searches, then critiques citing only papers found.</span></li>
+    </ol>
+    <div class="row">
+      <textarea id="q-input" rows="2" placeholder="e.g. How does social media engagement impact adolescent wellbeing? (Enter to stress-test, Shift+Enter for newline)"></textarea>
+      <button id="q-run" class="primary">Stress-test</button>
+    </div>
+    <div class="examples" id="q-examples"></div>
+    <div id="q-out"></div>
+  </section>
+
   <!-- TASK 2 -->
   <section id="tab-diary" class="tab">
     <div class="cols">
@@ -146,6 +175,21 @@
         </details>
       </aside>
     </div>
+  </section>
+
+  <!-- TASK 3 -->
+  <section id="tab-claims" class="tab" hidden>
+    <div class="intro">
+      <h2>Claim-to-evidence map</h2>
+      <p>Paste a paper's text. Each claim gets linked to the figure, table or paragraph behind it, and to the diary run that produced it. Claims that are unsupported or overstated are flagged.</p>
+    </div>
+    <div class="row">
+      <button id="c-demo" class="ghost">Load demo paper</button>
+      <span class="muted" id="c-demo-hint">The AlphaFold demo comes with a paper that overstates its results. Can you spot where before running it?</span>
+    </div>
+    <textarea id="c-input" rows="10" placeholder="Paste abstract + results + discussion (plain text)…"></textarea>
+    <div class="row"><button id="c-run" class="primary">Build claim map</button></div>
+    <div id="c-out"></div>
   </section>
 </main>
 
